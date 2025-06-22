@@ -750,4 +750,279 @@ def teacher_dashboard():
             assignment_title = st.text_input("Assignment Title")
             assignment_subject = st.selectbox("Subject", user_data["subjects"])
             assignment_type = st.selectbox("Type", ["Quiz", "Homework", "Project", "Test"])
-            due_date
+            due_date = st.date_input("Due Date")
+            
+            submitted = st.form_submit_button("Create Assignment")
+            
+            if submitted and assignment_title:
+                st.success(f"Assignment '{assignment_title}' created successfully!")
+
+def expert_dashboard():
+    """Expert dashboard for content creation and analysis"""
+    st.title("Expert Dashboard - Content & Curriculum Development 🧠")
+    
+    # Expert Overview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📚 Content Created</h3>
+            <h2>127</h2>
+            <p>This month</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>👥 Students Reached</h3>
+            <h2>1,247</h2>
+            <p>Using your content</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>⭐ Avg. Rating</h3>
+            <h2>4.8/5</h2>
+            <p>Content quality</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>🔄 In Review</h3>
+            <h2>23</h2>
+            <p>Pending approval</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Content Creation Tools
+    st.subheader("🛠️ Content Creation Tools")
+    
+    tab1, tab2, tab3 = st.tabs(["Create Content", "Analytics", "Collaboration"])
+    
+    with tab1:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("📝 New Learning Material")
+            
+            with st.form("content_creation"):
+                content_title = st.text_input("Content Title")
+                content_subject = st.selectbox("Subject", SUBJECTS)
+                content_type = st.selectbox("Content Type", 
+                    ["Video Lesson", "Interactive Exercise", "Mindmap", "Audio Explanation", "Reading Material"])
+                grade_level = st.selectbox("Grade Level", 
+                    ["Elementary", "Middle School", "High School", "University"])
+                difficulty = st.slider("Difficulty Level", 1, 10, 5)
+                
+                content_description = st.text_area("Content Description")
+                
+                uploaded_file = st.file_uploader("Upload Content File", 
+                    type=['pdf', 'mp4', 'mp3', 'png', 'jpg', 'docx'])
+                
+                if st.form_submit_button("Create Content"):
+                    if content_title and content_description:
+                        st.success("Content created and submitted for review!")
+                    else:
+                        st.error("Please fill in all required fields")
+        
+        with col2:
+            st.subheader("🤖 AI Content Assistant")
+            
+            st.write("Generate content suggestions using AI:")
+            
+            ai_prompt = st.text_area("Describe the content you want to create:")
+            
+            if st.button("Generate AI Suggestions"):
+                suggestions = [
+                    "Interactive quadratic equation solver with step-by-step explanations",
+                    "Visual mindmap connecting algebra concepts to real-world applications",
+                    "Audio explanation series for different learning styles",
+                    "Gamified practice problems with immediate feedback"
+                ]
+                
+                st.write("**AI Suggestions:**")
+                for i, suggestion in enumerate(suggestions, 1):
+                    st.write(f"{i}. {suggestion}")
+    
+    with tab2:
+        st.subheader("📊 Content Performance Analytics")
+        
+        # Sample analytics data
+        analytics_data = pd.DataFrame({
+            'Content': ['Algebra Basics', 'Physics Motion', 'Chemistry Bonds', 'Literature Analysis'],
+            'Views': [1247, 892, 654, 445],
+            'Completion Rate': [85, 78, 92, 67],
+            'Rating': [4.8, 4.6, 4.9, 4.3]
+        })
+        
+        st.dataframe(analytics_data, use_container_width=True)
+        
+        # Performance chart
+        fig = px.bar(analytics_data, x='Content', y='Views', color='Rating',
+                     title='Content Performance Overview')
+        st.plotly_chart(fig, use_container_width=True)
+    
+    with tab3:
+        st.subheader("🤝 Expert Collaboration")
+        
+        st.write("**Active Collaborations:**")
+        
+        collaborations = [
+            {"Project": "Advanced Calculus Series", "Collaborators": ["Dr. Smith", "Prof. Johnson"], "Status": "In Progress"},
+            {"Project": "Interactive Chemistry Lab", "Collaborators": ["Dr. Lee", "Ms. Brown"], "Status": "Review"},
+            {"Project": "Literature Analysis Framework", "Collaborators": ["Prof. Wilson"], "Status": "Completed"}
+        ]
+        
+        for collab in collaborations:
+            with st.expander(f"📋 {collab['Project']} - {collab['Status']}"):
+                st.write(f"**Collaborators:** {', '.join(collab['Collaborators'])}")
+                st.write(f"**Status:** {collab['Status']}")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("View Project", key=f"view_{collab['Project']}"):
+                        st.info("Opening project details...")
+                with col_b:
+                    if st.button("Join Meeting", key=f"meet_{collab['Project']}"):
+                        st.success("Joining collaboration meeting...")
+
+def llm_integration_demo():
+    """Demonstration of LLM integration for different learning scenarios"""
+    st.title("🤖 AI Learning Models Integration")
+    
+    st.write("Experience how different AI models enhance your learning:")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("Available AI Models")
+        
+        for model, description in LLM_MODELS.items():
+            st.markdown(f"""
+            <div class="role-card">
+                <h4>{model}</h4>
+                <p>{description}</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    with col2:
+        st.subheader("Try AI-Powered Learning")
+        
+        learning_scenario = st.selectbox("Choose Learning Scenario:", [
+            "Math Problem Solving",
+            "Essay Writing Help",
+            "Science Concept Explanation",
+            "Historical Research",
+            "Language Practice"
+        ])
+        
+        user_question = st.text_area("Ask your question:")
+        
+        if st.button("Get AI Help"):
+            # Simulate different AI responses based on scenario
+            responses = {
+                "Math Problem Solving": "Let me break down this problem step by step using visual diagrams...",
+                "Essay Writing Help": "I'll help you structure your essay with a clear thesis and supporting arguments...",
+                "Science Concept Explanation": "Let me explain this concept using real-world examples and interactive visualizations...",
+                "Historical Research": "I'll help you find reliable sources and verify historical facts...",
+                "Language Practice": "Let's practice this conversation in a fun, engaging way..."
+            }
+            
+            recommended_model = {
+                "Math Problem Solving": "Gemini",
+                "Essay Writing Help": "GPT-4",
+                "Science Concept Explanation": "Claude",
+                "Historical Research": "Perplexity",
+                "Language Practice": "Grok"
+            }
+            
+            st.success(f"**Recommended AI Model:** {recommended_model[learning_scenario]}")
+            st.write(f"**AI Response:** {responses[learning_scenario]}")
+
+# Main application logic
+def main():
+    """Main application function"""
+    
+    # Check if user is logged in
+    if st.session_state.current_user is None:
+        login_page()
+        return
+    
+    # Get current user data
+    user_data = SAMPLE_USERS[st.session_state.current_user]
+    
+    # Sidebar navigation
+    with st.sidebar:
+        st.title(f"Welcome, {user_data['name']}")
+        st.write(f"**Role:** {user_data['role']}")
+        
+        # Navigation menu
+        if user_data['role'] == 'Student':
+            if 'assessment_results' not in st.session_state or not st.session_state.assessment_results:
+                page = st.selectbox("Navigate", ["Assessment", "Dashboard", "AI Models Demo"])
+            else:
+                page = st.selectbox("Navigate", ["Dashboard", "Assessment", "AI Models Demo"])
+        else:
+            page = st.selectbox("Navigate", ["Dashboard", "AI Models Demo"])
+        
+        # Quick stats
+        st.markdown("---")
+        st.subheader("Quick Stats")
+        
+        if user_data['role'] == 'Student':
+            st.metric("Overall Progress", "72%", "↗️ +5%")
+            st.metric("Study Streak", "15 days", "🔥")
+        elif user_data['role'] == 'Tutor':
+            st.metric("Active Students", "15", "👥")
+            st.metric("Sessions Today", "8", "📅")
+        elif user_data['role'] == 'Parent':
+            st.metric("Child's Progress", "68%", "📈 +8%")
+        elif user_data['role'] == 'Teacher':
+            st.metric("Class Average", "76%", "📊")
+            st.metric("Students at Risk", "3", "⚠️")
+        
+        # Logout button
+        st.markdown("---")
+        if st.button("Logout", use_container_width=True):
+            st.session_state.current_user = None
+            st.session_state.chat_history = []
+            st.session_state.assessment_results = {}
+            st.rerun()
+    
+    # Main content area
+    if user_data['role'] == 'Student':
+        if page == "Assessment":
+            intake_assessment()
+        elif page == "Dashboard":
+            student_dashboard()
+        elif page == "AI Models Demo":
+            llm_integration_demo()
+    elif user_data['role'] == 'Tutor':
+        if page == "Dashboard":
+            tutor_dashboard()
+        elif page == "AI Models Demo":
+            llm_integration_demo()
+    elif user_data['role'] == 'Parent':
+        if page == "Dashboard":
+            parent_dashboard()
+        elif page == "AI Models Demo":
+            llm_integration_demo()
+    elif user_data['role'] == 'Teacher':
+        if page == "Dashboard":
+            teacher_dashboard()
+        elif page == "AI Models Demo":
+            llm_integration_demo()
+    elif user_data['role'] == 'Expert':
+        if page == "Dashboard":
+            expert_dashboard()
+        elif page == "AI Models Demo":
+            llm_integration_demo()
+
+if __name__ == "__main__":
+    main()
