@@ -30,6 +30,55 @@ if 'assessment_results' not in st.session_state:
     st.session_state.assessment_results = {}
 if 'all_users' not in st.session_state:
     st.session_state.all_users = {}
+if 'user_stats' not in st.session_state:
+    st.session_state.user_stats = {}
+
+def get_user_stats(user_id):
+    """Get or initialize user statistics"""
+    if user_id not in st.session_state.user_stats:
+        st.session_state.user_stats[user_id] = {
+            'overall_progress': 0,
+            'study_streak': 0,
+            'study_time_today': 0,
+            'achievements': 0,
+            'last_activity_date': None,
+            'total_study_time': 0,
+            'sessions_completed': 0,
+            'problems_solved': 0
+        }
+    return st.session_state.user_stats[user_id]
+
+def update_user_stats(user_id, activity_type, progress_amount=0, time_spent=0):
+    """Update user statistics based on activity"""
+    stats = get_user_stats(user_id)
+    today = datetime.now().date()
+    
+    # Update study time
+    stats['study_time_today'] += time_spent
+    stats['total_study_time'] += time_spent
+    
+    # Update progress
+    stats['overall_progress'] = min(100, stats['overall_progress'] + progress_amount)
+    
+    # Update streak
+    if stats['last_activity_date'] != today:
+        if stats['last_activity_date'] == today - timedelta(days=1):
+            stats['study_streak'] += 1
+        else:
+            stats['study_streak'] = 1
+        stats['last_activity_date'] = today
+    
+    # Activity-specific updates
+    if activity_type == 'lesson_completed':
+        stats['sessions_completed'] += 1
+        if stats['sessions_completed'] % 5 == 0:  # Achievement every 5 sessions
+            stats['achievements'] += 1
+    elif activity_type == 'problem_solved':
+        stats['problems_solved'] += 1
+        if stats['problems_solved'] % 10 == 0:  # Achievement every 10 problems
+            stats['achievements'] += 1
+    
+    return stats
 
 # Sample data for demonstration (demo users)
 DEMO_USERS = {
@@ -399,62 +448,74 @@ def intake_assessment():
 def student_dashboard():
     """Student dashboard with personalized learning"""
     user_data = st.session_state.all_users[st.session_state.current_user]
+    user_id = st.session_state.current_user
+    stats = get_user_stats(user_id)
     
     st.title(f"Welcome back, {user_data['name']}! 🎓")
     
-    # Progress Overview
+    # Progress Overview with real stats
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         <div class="metric-card">
             <h3>📊 Overall Progress</h3>
-            <h2>72%</h2>
+            <h2>{stats['overall_progress']:.0f}%</h2>
             <p>Keep going!</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown("""
+        st.markdown(f"""
         <div class="metric-card">
             <h3>🔥 Study Streak</h3>
-            <h2>15 days</h2>
-            <p>Amazing!</p>
+            <h2>{stats['study_streak']} days</h2>
+            <p>{"Amazing!" if stats['study_streak'] > 7 else "Great start!"}</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        st.markdown("""
+        st.markdown(f"""
         <div class="metric-card">
             <h3>⏱️ Study Time Today</h3>
-            <h2>2.5 hrs</h2>
-            <p>On track</p>
+            <h2>{stats['study_time_today']:.1f} hrs</h2>
+            <p>{"On track" if stats['study_time_today'] >= 2 else "Keep going"}</p>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
-        st.markdown("""
+        st.markdown(f"""
         <div class="metric-card">
             <h3>🏆 Achievements</h3>
-            <h2>12</h2>
+            <h2>{stats['achievements']}</h2>
             <p>Badges earned</p>
         </div>
         """, unsafe_allow_html=True)
     
-    # Subject Progress
+    # Subject Progress with interactive updates
     st.subheader("📈 Subject Progress")
     
     # Use user's actual progress or create sample data
     if user_data.get("progress"):
+        # Update progress based on recent activities
+        current_progress = user_data["progress"].copy()
+        
+        # Add some adaptive learning based on user stats
+        if stats['sessions_completed'] > 0:
+            for subject in current_progress:
+                # Gradually increase progress based on activity
+                boost = min(stats['sessions_completed'] * 2, 20)
+                current_progress[subject] = min(100, current_progress[subject] + boost)
+        
         progress_data = pd.DataFrame([
             {"Subject": subject, "Progress": progress}
-            for subject, progress in user_data["progress"].items()
+            for subject, progress in current_progress.items()
         ])
     else:
         # Default progress for users without specific progress data
         default_subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Chemistry", "Literature"])
         progress_data = pd.DataFrame([
-            {"Subject": subject, "Progress": random.randint(40, 90)}
+            {"Subject": subject, "Progress": max(0, min(100, random.randint(20, 40) + stats['overall_progress']))}
             for subject in default_subjects[:4]
         ])
     
@@ -465,56 +526,133 @@ def student_dashboard():
         fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
     
-    # Learning Path
+    # Interactive Learning Path
     col1, col2 = st.columns(2)
     
     with col1:
         st.subheader("🎯 Today's Learning Plan")
         
-        # Generate learning tasks based on user's interests
+        # Generate learning tasks based on user's interests and adaptive difficulty
         subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Literature", "History"])
         learning_tasks = []
         
+        # Adaptive difficulty based on progress
+        difficulty_level = "Beginner" if stats['overall_progress'] < 30 else "Intermediate" if stats['overall_progress'] < 70 else "Advanced"
+        
         for i, subject in enumerate(subjects[:4]):
             tasks = {
-                "Mathematics": "Complete Algebra Chapter 5",
-                "Physics": "Newton's Laws Practice", 
-                "Chemistry": "Chemical Bonding Exercises",
-                "Literature": "Essay Writing Practice",
-                "History": "World War II Timeline",
-                "Biology": "Cell Structure Study",
-                "Geography": "Climate Zones Review",
-                "Economics": "Supply and Demand Analysis"
+                "Mathematics": f"{difficulty_level} Algebra Chapter 5",
+                "Physics": f"{difficulty_level} Newton's Laws Practice", 
+                "Chemistry": f"{difficulty_level} Chemical Bonding Exercises",
+                "Literature": f"{difficulty_level} Essay Writing Practice",
+                "History": f"{difficulty_level} World War II Timeline",
+                "Biology": f"{difficulty_level} Cell Structure Study",
+                "Geography": f"{difficulty_level} Climate Zones Review",
+                "Economics": f"{difficulty_level} Supply and Demand Analysis"
             }
             
-            task_name = tasks.get(subject, f"{subject} Practice Session")
+            task_name = tasks.get(subject, f"{difficulty_level} {subject} Practice Session")
+            estimated_time = random.randint(25, 50) * (1.5 if difficulty_level == "Advanced" else 1)
+            
             learning_tasks.append({
                 "task": task_name,
-                "time": f"{random.randint(25, 50)} min",
-                "type": subject
+                "time": f"{estimated_time:.0f} min",
+                "type": subject,
+                "estimated_hours": estimated_time / 60
             })
         
         for task in learning_tasks:
             with st.expander(f"📚 {task['task']} ({task['time']})"):
                 st.write(f"**Subject:** {task['type']}")
+                st.write(f"**Difficulty:** {difficulty_level}")
                 st.write("**Learning Mode:** Interactive with AI tutor")
                 st.write("**Resources:** Video, Practice Problems, Mindmap")
                 
                 col_a, col_b = st.columns(2)
                 with col_a:
                     if st.button(f"Start Learning", key=f"start_{task['task']}"):
-                        st.success("Starting your personalized lesson...")
+                        # Update stats when starting a lesson
+                        progress_gained = random.randint(3, 8)
+                        time_spent = task['estimated_hours']
+                        
+                        update_user_stats(user_id, 'lesson_completed', 
+                                        progress_amount=progress_gained, 
+                                        time_spent=time_spent)
+                        
+                        # Update subject progress
+                        if user_data.get("progress") and task['type'] in user_data["progress"]:
+                            user_data["progress"][task['type']] = min(100, 
+                                user_data["progress"][task['type']] + progress_gained)
+                        
+                        st.success(f"🎉 Great job! You gained {progress_gained} progress points and studied for {time_spent:.1f} hours!")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                        
                 with col_b:
                     if st.button(f"Get Help", key=f"help_{task['task']}"):
-                        st.info("Connecting you with AI tutor...")
+                        st.info("🤖 AI tutor is ready to help! Ask any questions about this topic.")
     
     with col2:
         st.subheader("🤖 AI Learning Assistant")
         
+        # Interactive practice problems
+        st.subheader("🧮 Quick Practice")
+        
+        if st.button("Generate Practice Problem", use_container_width=True):
+            problems = {
+                "Mathematics": [
+                    "Solve: 2x + 5 = 13",
+                    "Find the area of a circle with radius 7cm",
+                    "Simplify: (3x²)(4x³)",
+                    "What is 15% of 240?"
+                ],
+                "Physics": [
+                    "A car accelerates at 2 m/s². What's its velocity after 5 seconds?",
+                    "Calculate the force needed to accelerate a 10kg object at 3 m/s²",
+                    "What's the kinetic energy of a 5kg object moving at 10 m/s?"
+                ],
+                "Chemistry": [
+                    "Balance this equation: H₂ + O₂ → H₂O",
+                    "How many moles are in 36g of H₂O?",
+                    "What's the pH of a 0.1M HCl solution?"
+                ]
+            }
+            
+            # Select problem based on user interests
+            user_subjects = user_data.get("subjects_interest", ["Mathematics"])
+            selected_subject = random.choice(user_subjects)
+            
+            if selected_subject in problems:
+                problem = random.choice(problems[selected_subject])
+                st.info(f"**{selected_subject} Problem:** {problem}")
+                
+                user_answer = st.text_input("Your answer:", key=f"answer_{random.randint(1000,9999)}")
+                
+                if st.button("Submit Answer") and user_answer:
+                    # Simulate checking answer and update stats
+                    is_correct = random.choice([True, True, False])  # 66% chance correct
+                    
+                    if is_correct:
+                        progress_gained = random.randint(1, 3)
+                        update_user_stats(user_id, 'problem_solved', progress_amount=progress_gained)
+                        st.success(f"✅ Correct! You earned {progress_gained} progress points!")
+                        
+                        # Update subject progress
+                        if user_data.get("progress") and selected_subject in user_data["progress"]:
+                            user_data["progress"][selected_subject] = min(100, 
+                                user_data["progress"][selected_subject] + progress_gained)
+                    else:
+                        st.error("❌ Not quite right. Try again or ask for help!")
+                    
+                    time.sleep(1)
+                    st.rerun()
+        
         # Chat Interface
+        st.subheader("💬 Chat with AI Tutor")
         st.write("Ask me anything about your studies!")
         
-        for message in st.session_state.chat_history[-5:]:  # Show last 5 messages
+        for message in st.session_state.chat_history[-3:]:  # Show last 3 messages
             if message["role"] == "user":
                 st.markdown(f'<div class="chat-message user-message">👤 {message["content"]}</div>', 
                           unsafe_allow_html=True)
@@ -528,59 +666,96 @@ def student_dashboard():
             # Add user message
             st.session_state.chat_history.append({"role": "user", "content": user_input})
             
-            # Generate AI response (simulated)
-            ai_responses = [
-                "Great question! Let me help you understand this concept step by step...",
-                "I can see you're working on this topic. Here's a different approach that might help...",
-                "That's a common challenge! Let's break it down using your preferred visual learning style...",
-                "Excellent! You're making good progress. Here's what to focus on next..."
-            ]
+            # Generate adaptive AI response based on user's progress
+            if stats['overall_progress'] < 30:
+                ai_responses = [
+                    "Great question! Let me start with the basics and build up to this concept...",
+                    "I can see you're just getting started. Let's break this down into simple steps...",
+                    "Perfect timing to learn this! Here's a beginner-friendly explanation..."
+                ]
+            elif stats['overall_progress'] < 70:
+                ai_responses = [
+                    "Good question! You're making solid progress. Let me explain this intermediate concept...",
+                    "I can see you're developing your skills well. Here's how to tackle this...",
+                    "You're ready for this challenge! Let me guide you through it..."
+                ]
+            else:
+                ai_responses = [
+                    "Excellent question! At your advanced level, let's explore the deeper concepts...",
+                    "Great to see you tackling advanced topics! Here's a comprehensive explanation...",
+                    "You're doing amazing work! Let's dive into the advanced aspects..."
+                ]
             
             ai_response = random.choice(ai_responses)
             st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
             
+            # Small progress for engaging with AI
+            update_user_stats(user_id, 'chat_interaction', progress_amount=0.5, time_spent=0.05)
+            
             st.rerun()
     
-    # Recommendations
+    # Dynamic Recommendations based on progress
     st.subheader("💡 Personalized Recommendations")
     
     col1, col2, col3 = st.columns(3)
     
+    # Adaptive recommendations based on user's current level
+    if stats['overall_progress'] < 30:
+        recommendations = {
+            "resources": ["Khan Academy: Basic Concepts", "Interactive Tutorials", "Visual Learning Aids"],
+            "focus": ["Foundation building", "Basic problem solving", "Study habits"],
+            "milestones": ["Complete first 5 lessons", "Solve 10 practice problems", "Study 30 minutes daily"]
+        }
+    elif stats['overall_progress'] < 70:
+        recommendations = {
+            "resources": ["Advanced Coursework", "Practice Tests", "Peer Study Groups"],
+            "focus": ["Complex problem solving", "Application skills", "Time management"],
+            "milestones": ["Master current topics", "Take practice quiz", "Maintain study streak"]
+        }
+    else:
+        recommendations = {
+            "resources": ["Research Papers", "Advanced Simulations", "Expert Lectures"],
+            "focus": ["Critical thinking", "Research skills", "Teaching others"],
+            "milestones": ["Lead a study group", "Complete advanced project", "Mentor new students"]
+        }
+    
     with col1:
-        st.markdown("""
+        st.markdown(f"""
         <div class="role-card">
             <h4>📖 Recommended Resources</h4>
             <ul>
-                <li>Khan Academy: Quadratic Equations</li>
-                <li>Crash Course Physics: Motion</li>
-                <li>Interactive Chemistry Lab Sim</li>
+                {''.join([f'<li>{resource}</li>' for resource in recommendations["resources"]])}
             </ul>
         </div>
         """, unsafe_allow_html=True)
     
     with col2:
-        st.markdown("""
+        st.markdown(f"""
         <div class="role-card">
             <h4>🎯 Focus Areas</h4>
             <ul>
-                <li>Literature: Reading comprehension</li>
-                <li>History: Timeline memorization</li>
-                <li>Chemistry: Balancing equations</li>
+                {''.join([f'<li>{focus}</li>' for focus in recommendations["focus"]])}
             </ul>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
-        st.markdown("""
+        st.markdown(f"""
         <div class="role-card">
             <h4>🏆 Next Milestones</h4>
             <ul>
-                <li>Complete 5 math problems</li>
-                <li>Read 2 history chapters</li>
-                <li>Practice essay writing</li>
+                {''.join([f'<li>{milestone}</li>' for milestone in recommendations["milestones"]])}
             </ul>
         </div>
         """, unsafe_allow_html=True)
+    
+    # Progress Reset Option (for testing)
+    with st.expander("🔄 Reset Progress (Demo Purpose)"):
+        if st.button("Reset All Stats", type="secondary"):
+            if user_id in st.session_state.user_stats:
+                del st.session_state.user_stats[user_id]
+            st.success("Stats reset! Refresh to see changes.")
+            st.rerun()
 
 def tutor_dashboard():
     """Tutor dashboard for managing students and sessions"""
