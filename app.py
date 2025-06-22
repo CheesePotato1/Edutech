@@ -231,24 +231,28 @@ def login_page():
                             st.rerun()
                         else:
                             st.error("Account not found. Please check your email or create a new account.")
+            
+            # Demo mode section (outside the form)
+            if st.session_state.get('show_demo_options', False) or demo_mode:
+                st.session_state.show_demo_options = True
                 
-                if demo_mode:
-                    # Show demo user options
-                    st.subheader("Try Demo Account")
-                    demo_options = {
-                        "Demo Student": "demo_student",
-                        "Demo Tutor": "demo_tutor", 
-                        "Demo Parent": "demo_parent",
-                        "Demo Teacher": "demo_teacher"
-                    }
-                    
-                    selected_demo = st.selectbox("Choose demo role:", list(demo_options.keys()))
-                    
-                    if st.button("Enter Demo", use_container_width=True):
-                        st.session_state.current_user = demo_options[selected_demo]
-                        st.success(f"Entering demo as {selected_demo}...")
-                        time.sleep(1)
-                        st.rerun()
+                st.markdown("---")
+                st.subheader("Try Demo Account")
+                demo_options = {
+                    "Demo Student": "demo_student",
+                    "Demo Tutor": "demo_tutor", 
+                    "Demo Parent": "demo_parent",
+                    "Demo Teacher": "demo_teacher"
+                }
+                
+                selected_demo = st.selectbox("Choose demo role:", list(demo_options.keys()))
+                
+                if st.button("Enter Demo", use_container_width=True):
+                    st.session_state.current_user = demo_options[selected_demo]
+                    st.session_state.show_demo_options = False
+                    st.success(f"Entering demo as {selected_demo}...")
+                    time.sleep(1)
+                    st.rerun()
         
         with tab2:
             st.subheader("Join EduTech Today!")
@@ -1608,9 +1612,14 @@ def main():
         st.markdown("---")
         st.subheader("Quick Stats")
         
+        # Get user stats for sidebar display
+        user_stats = get_user_stats(st.session_state.current_user)
+        
         if user_data['role'] == 'Student':
-            st.metric("Overall Progress", "72%", "↗️ +5%")
-            st.metric("Study Streak", "15 days", "🔥")
+            st.metric("Overall Progress", f"{user_stats['overall_progress']:.0f}%", 
+                     delta=f"+{min(5, user_stats['sessions_completed'])}%" if user_stats['sessions_completed'] > 0 else None)
+            st.metric("Study Streak", f"{user_stats['study_streak']} days", 
+                     delta="🔥" if user_stats['study_streak'] > 0 else None)
         elif user_data['role'] == 'Tutor':
             st.metric("Active Students", "15", "👥")
             st.metric("Sessions Today", "8", "📅")
@@ -1634,6 +1643,8 @@ def main():
             intake_assessment()
         elif page == "Dashboard":
             student_dashboard()
+        elif page == "Practice":
+            practice_page()
         elif page == "AI Models Demo":
             llm_integration_demo()
     elif user_data['role'] == 'Tutor':
