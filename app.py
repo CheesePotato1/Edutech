@@ -125,7 +125,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def login_page():
-    """Login/Registration page"""
+    """Registration page"""
     st.markdown("""
     <div class="main-header">
         <h1>🎓 EduTech AI Learning Platform</h1>
@@ -136,40 +136,121 @@ def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.subheader("Welcome! Please sign in or register")
+        st.subheader("Welcome! Let's get you started")
         
-        tab1, tab2 = st.tabs(["Sign In", "Register"])
-        
-        with tab1:
-            username = st.selectbox("Select Demo User", 
-                                   [""] + list(SAMPLE_USERS.keys()),
-                                   format_func=lambda x: f"{SAMPLE_USERS[x]['name']} ({SAMPLE_USERS[x]['role']})" if x else "Select a user...")
+        with st.form("registration_form"):
+            st.subheader("Create Your Account")
             
-            if st.button("Sign In", use_container_width=True):
-                if username:
-                    st.session_state.current_user = username
-                    st.rerun()
+            name = st.text_input("Full Name *", placeholder="Enter your full name")
+            email = st.text_input("Email Address *", placeholder="Enter your email")
+            password = st.text_input("Password *", type="password", placeholder="Create a password")
+            
+            st.markdown("---")
+            st.subheader("What's your role?")
+            
+            role = st.selectbox("I am a...", [
+                "",
+                "Student - I want to learn and improve my skills",
+                "Tutor - I want to help students learn effectively", 
+                "Parent - I want to monitor my child's progress",
+                "Teacher - I want to manage my classroom",
+                "Expert - I want to create educational content"
+            ])
+            
+            # Additional fields based on role selection
+            if "Student" in str(role):
+                st.markdown("### Tell us about yourself")
+                age = st.number_input("Age", min_value=5, max_value=25, value=16)
+                grade = st.selectbox("Grade Level", 
+                                   ["", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "University"])
+                learning_style = st.multiselect("How do you prefer to learn? (Select all that apply)", LEARNING_STYLES)
+                subjects_interest = st.multiselect("What subjects interest you?", SUBJECTS)
+                
+            elif "Tutor" in str(role):
+                st.markdown("### Tutor Information")
+                specialization = st.multiselect("Your specialization subjects", SUBJECTS)
+                experience = st.selectbox("Years of tutoring experience", ["Less than 1 year", "1-3 years", "3-5 years", "5+ years"])
+                
+            elif "Parent" in str(role):
+                st.markdown("### Parent Information")
+                num_children = st.number_input("Number of children", min_value=1, max_value=10, value=1)
+                children_ages = st.text_input("Children's ages (separated by commas)", placeholder="e.g., 8, 12, 16")
+                
+            elif "Teacher" in str(role):
+                st.markdown("### Teacher Information")
+                subjects_taught = st.multiselect("Subjects you teach", SUBJECTS)
+                grade_levels = st.multiselect("Grade levels you teach", 
+                                            ["Elementary", "Middle School", "High School", "University"])
+                
+            elif "Expert" in str(role):
+                st.markdown("### Expert Information")
+                expertise_areas = st.multiselect("Your areas of expertise", SUBJECTS)
+                credentials = st.text_area("Brief description of your credentials", 
+                                         placeholder="PhD in Mathematics, 10 years industry experience...")
+            
+            # Terms and conditions
+            st.markdown("---")
+            agree_terms = st.checkbox("I agree to the Terms of Service and Privacy Policy")
+            
+            submitted = st.form_submit_button("Create Account", use_container_width=True)
+            
+            if submitted:
+                if not name or not email or not password or not role or not agree_terms:
+                    st.error("Please fill in all required fields and agree to the terms.")
+                elif not role.strip():
+                    st.error("Please select your role.")
                 else:
-                    st.error("Please select a user")
-        
-        with tab2:
-            with st.form("registration_form"):
-                st.subheader("Create New Account")
-                
-                name = st.text_input("Full Name")
-                email = st.text_input("Email")
-                role = st.selectbox("Role", ["Student", "Tutor", "Parent", "Teacher", "Expert"])
-                
-                if role == "Student":
-                    age = st.number_input("Age", min_value=5, max_value=25, value=16)
-                    grade = st.selectbox("Grade Level", 
-                                       ["K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "University"])
-                    learning_style = st.multiselect("Preferred Learning Style", LEARNING_STYLES)
-                
-                submitted = st.form_submit_button("Register", use_container_width=True)
-                
-                if submitted and name and email:
-                    st.success("Registration successful! Please sign in with your credentials.")
+                    # Extract role from selection
+                    user_role = role.split(" - ")[0]
+                    
+                    # Create new user data
+                    new_user_id = f"user_{len(SAMPLE_USERS) + 1}"
+                    user_data = {
+                        "name": name,
+                        "role": user_role,
+                        "email": email
+                    }
+                    
+                    # Add role-specific data
+                    if user_role == "Student":
+                        user_data.update({
+                            "age": age,
+                            "grade": grade,
+                            "learning_style": learning_style,
+                            "subjects_interest": subjects_interest,
+                            "progress": {subject: random.randint(40, 90) for subject in subjects_interest[:5]}
+                        })
+                    elif user_role == "Tutor":
+                        user_data.update({
+                            "specialization": specialization,
+                            "experience": experience,
+                            "students": []
+                        })
+                    elif user_role == "Parent":
+                        user_data.update({
+                            "num_children": num_children,
+                            "children_ages": children_ages,
+                            "children": [f"Child {i+1}" for i in range(num_children)]
+                        })
+                    elif user_role == "Teacher":
+                        user_data.update({
+                            "subjects": subjects_taught,
+                            "grade_levels": grade_levels,
+                            "class_size": random.randint(20, 35)
+                        })
+                    elif user_role == "Expert":
+                        user_data.update({
+                            "expertise_areas": expertise_areas,
+                            "credentials": credentials
+                        })
+                    
+                    # Store user data
+                    SAMPLE_USERS[new_user_id] = user_data
+                    st.session_state.current_user = new_user_id
+                    
+                    st.success(f"Welcome to EduTech AI Learning Platform, {name}! 🎉")
+                    time.sleep(2)
+                    st.rerun()
 
 def intake_assessment():
     """Adaptive intake assessment"""
