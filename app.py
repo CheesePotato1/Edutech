@@ -1268,7 +1268,264 @@ def expert_dashboard():
                     if st.button("Join Meeting", key=f"meet_{collab['Project']}"):
                         st.success("Joining collaboration meeting...")
 
-def llm_integration_demo():
+def practice_page():
+    """Dedicated practice page with interactive exercises"""
+    user_data = st.session_state.all_users[st.session_state.current_user]
+    user_id = st.session_state.current_user
+    stats = get_user_stats(user_id)
+    
+    st.title("🧮 Practice Center")
+    st.write("Strengthen your skills with interactive practice problems!")
+    
+    # Practice stats overview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Problems Solved", stats['problems_solved'], delta=None)
+    
+    with col2:
+        st.metric("Practice Sessions", stats['sessions_completed'], delta=None)
+    
+    with col3:
+        accuracy = min(100, 60 + stats['problems_solved'] * 2)  # Simulate improving accuracy
+        st.metric("Accuracy Rate", f"{accuracy}%", delta=f"+{min(5, stats['problems_solved'])}%")
+    
+    with col4:
+        difficulty_level = "Beginner" if stats['overall_progress'] < 30 else "Intermediate" if stats['overall_progress'] < 70 else "Advanced"
+        st.metric("Current Level", difficulty_level, delta=None)
+    
+    # Subject selection
+    st.subheader("📚 Choose Your Subject")
+    
+    subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Chemistry", "Literature", "History"])
+    selected_subject = st.selectbox("Select a subject to practice:", subjects)
+    
+    # Difficulty selection based on progress
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if stats['overall_progress'] < 30:
+            available_difficulties = ["Beginner"]
+        elif stats['overall_progress'] < 70:
+            available_difficulties = ["Beginner", "Intermediate"]
+        else:
+            available_difficulties = ["Beginner", "Intermediate", "Advanced"]
+        
+        selected_difficulty = st.selectbox("Choose difficulty:", available_difficulties)
+    
+    with col2:
+        practice_type = st.selectbox("Practice type:", [
+            "Multiple Choice",
+            "Short Answer", 
+            "Problem Solving",
+            "Quick Quiz (5 questions)"
+        ])
+    
+    # Problem bank based on subject and difficulty
+    problem_banks = {
+        "Mathematics": {
+            "Beginner": [
+                {"question": "What is 15 + 27?", "answer": "42", "type": "arithmetic"},
+                {"question": "Solve for x: x + 5 = 12", "answer": "7", "type": "algebra"},
+                {"question": "What is 8 × 9?", "answer": "72", "type": "arithmetic"},
+                {"question": "What is 144 ÷ 12?", "answer": "12", "type": "arithmetic"}
+            ],
+            "Intermediate": [
+                {"question": "Solve: 2x + 7 = 19", "answer": "6", "type": "algebra"},
+                {"question": "Find the area of a circle with radius 5cm (use π ≈ 3.14)", "answer": "78.5", "type": "geometry"},
+                {"question": "Simplify: (3x²)(4x³)", "answer": "12x⁵", "type": "algebra"},
+                {"question": "What is 15% of 240?", "answer": "36", "type": "percentage"}
+            ],
+            "Advanced": [
+                {"question": "Find the derivative of f(x) = 3x² + 2x + 1", "answer": "6x + 2", "type": "calculus"},
+                {"question": "Solve the quadratic equation: x² - 5x + 6 = 0", "answer": "x = 2, 3", "type": "algebra"},
+                {"question": "Find the integral of 2x dx", "answer": "x² + C", "type": "calculus"}
+            ]
+        },
+        "Physics": {
+            "Beginner": [
+                {"question": "What is the unit of force?", "answer": "Newton", "type": "concepts"},
+                {"question": "If a car travels 60 km in 2 hours, what is its speed?", "answer": "30 km/h", "type": "motion"},
+                {"question": "What happens to the volume of gas when heated?", "answer": "increases", "type": "concepts"}
+            ],
+            "Intermediate": [
+                {"question": "A car accelerates at 2 m/s². What's its velocity after 5 seconds from rest?", "answer": "10 m/s", "type": "motion"},
+                {"question": "Calculate force: F = ma, where m = 10kg and a = 3 m/s²", "answer": "30 N", "type": "forces"},
+                {"question": "What's the kinetic energy of a 5kg object moving at 10 m/s? (KE = ½mv²)", "answer": "250 J", "type": "energy"}
+            ],
+            "Advanced": [
+                {"question": "Calculate the electric field 2m from a 5μC charge (k = 9×10⁹)", "answer": "11,250 N/C", "type": "electricity"},
+                {"question": "Find the frequency of light with wavelength 500nm (c = 3×10⁸ m/s)", "answer": "6×10¹⁴ Hz", "type": "waves"}
+            ]
+        },
+        "Chemistry": {
+            "Beginner": [
+                {"question": "What is the chemical symbol for water?", "answer": "H2O", "type": "formulas"},
+                {"question": "How many protons does carbon have?", "answer": "6", "type": "atoms"},
+                {"question": "What is the pH of pure water?", "answer": "7", "type": "acids"}
+            ],
+            "Intermediate": [
+                {"question": "Balance: H₂ + O₂ → H₂O", "answer": "2H₂ + O₂ → 2H₂O", "type": "equations"},
+                {"question": "How many moles are in 36g of H₂O? (H₂O = 18 g/mol)", "answer": "2 moles", "type": "moles"},
+                {"question": "What's the molarity of 2 moles of NaCl in 1L solution?", "answer": "2 M", "type": "solutions"}
+            ],
+            "Advanced": [
+                {"question": "Calculate ΔG for a reaction with ΔH = -100 kJ/mol, T = 298K, ΔS = -50 J/mol·K", "answer": "-85.1 kJ/mol", "type": "thermodynamics"},
+                {"question": "What is the pH of 0.01 M HCl solution?", "answer": "2", "type": "acids"}
+            ]
+        }
+    }
+    
+    # Generate practice session
+    if st.button("🎯 Start Practice Session", use_container_width=True, type="primary"):
+        if selected_subject in problem_banks and selected_difficulty in problem_banks[selected_subject]:
+            problems = problem_banks[selected_subject][selected_difficulty]
+            
+            if practice_type == "Quick Quiz (5 questions)":
+                # Generate a quiz
+                st.subheader(f"📝 {selected_subject} Quiz - {selected_difficulty} Level")
+                
+                quiz_problems = random.sample(problems, min(5, len(problems)))
+                correct_answers = 0
+                
+                with st.form("quiz_form"):
+                    user_answers = []
+                    for i, problem in enumerate(quiz_problems):
+                        st.write(f"**Question {i+1}:** {problem['question']}")
+                        answer = st.text_input(f"Your answer:", key=f"q_{i}")
+                        user_answers.append(answer)
+                    
+                    submitted = st.form_submit_button("Submit Quiz")
+                    
+                    if submitted:
+                        for i, (problem, user_answer) in enumerate(zip(quiz_problems, user_answers)):
+                            if user_answer.lower().strip() == problem['answer'].lower().strip():
+                                correct_answers += 1
+                                st.success(f"✅ Question {i+1}: Correct!")
+                            else:
+                                st.error(f"❌ Question {i+1}: Incorrect. Answer: {problem['answer']}")
+                        
+                        # Calculate score and update stats
+                        score = (correct_answers / len(quiz_problems)) * 100
+                        progress_gained = correct_answers * 2
+                        
+                        st.subheader(f"🎉 Quiz Complete!")
+                        st.write(f"**Score:** {correct_answers}/{len(quiz_problems)} ({score:.0f}%)")
+                        st.write(f"**Progress gained:** {progress_gained} points")
+                        
+                        # Update user stats
+                        update_user_stats(user_id, 'problem_solved', 
+                                        progress_amount=progress_gained, 
+                                        time_spent=0.25)  # 15 minutes for quiz
+                        
+                        # Update subject progress
+                        if user_data.get("progress") and selected_subject in user_data["progress"]:
+                            user_data["progress"][selected_subject] = min(100, 
+                                user_data["progress"][selected_subject] + progress_gained)
+                        
+                        if score >= 80:
+                            st.balloons()
+                            st.success("🌟 Excellent work! You're mastering this topic!")
+                        elif score >= 60:
+                            st.success("👍 Good job! Keep practicing to improve!")
+                        else:
+                            st.info("📚 Keep studying! Practice makes perfect!")
+                        
+                        time.sleep(2)
+                        st.rerun()
+            
+            else:
+                # Single problem practice
+                problem = random.choice(problems)
+                
+                st.subheader(f"🔍 {selected_subject} Practice - {selected_difficulty}")
+                st.write(f"**Problem Type:** {problem['type'].title()}")
+                
+                st.info(f"**Question:** {problem['question']}")
+                
+                user_answer = st.text_input("Your answer:", key=f"practice_{random.randint(1000,9999)}")
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if st.button("Check Answer") and user_answer:
+                        if user_answer.lower().strip() == problem['answer'].lower().strip():
+                            progress_gained = random.randint(2, 4)
+                            update_user_stats(user_id, 'problem_solved', progress_amount=progress_gained, time_spent=0.1)
+                            
+                            # Update subject progress
+                            if user_data.get("progress") and selected_subject in user_data["progress"]:
+                                user_data["progress"][selected_subject] = min(100, 
+                                    user_data["progress"][selected_subject] + progress_gained)
+                            
+                            st.success(f"✅ Correct! You earned {progress_gained} progress points!")
+                            st.balloons()
+                        else:
+                            st.error(f"❌ Not quite right. The correct answer is: {problem['answer']}")
+                            st.info("💡 Don't worry! Learning from mistakes is part of the process.")
+                        
+                        time.sleep(1)
+                        st.rerun()
+                
+                with col2:
+                    if st.button("Skip & Get New Problem"):
+                        st.rerun()
+    
+    # Practice recommendations
+    st.subheader("📋 Recommended Practice")
+    
+    # Show weak subjects for focused practice
+    if user_data.get("progress"):
+        weak_subjects = [(subject, progress) for subject, progress in user_data["progress"].items() if progress < 60]
+        
+        if weak_subjects:
+            st.write("**Subjects that need more practice:**")
+            
+            for subject, progress in weak_subjects:
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    st.write(f"📚 **{subject}** - Current: {progress}%")
+                    st.progress(progress / 100)
+                
+                with col2:
+                    if st.button(f"Practice {subject}", key=f"practice_rec_{subject}"):
+                        # Auto-select this subject and generate a problem
+                        st.session_state.selected_subject = subject
+                        st.rerun()
+    
+    # Daily practice streak
+    st.subheader("🔥 Practice Streak")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.metric("Daily Practice Streak", f"{stats['study_streak']} days")
+        st.write("Practice daily to maintain your streak!")
+    
+    with col2:
+        st.metric("Problems Solved Today", stats['problems_solved'] % 20)  # Reset daily simulation
+        st.write("Goal: 10 problems per day")
+        
+        progress_today = min(100, (stats['problems_solved'] % 20) * 10)
+        st.progress(progress_today / 100)
+    
+    # Achievement showcase
+    if stats['achievements'] > 0:
+        st.subheader("🏆 Recent Achievements")
+        
+        achievements = [
+            "🎯 Problem Solver: Solved 10 problems",
+            "📚 Dedicated Learner: 5 study sessions",
+            "🔥 Streak Master: 7-day study streak",
+            "🌟 Quiz Master: 90% quiz average",
+            "🚀 Progress Champion: 50% overall progress"
+        ]
+        
+        earned_achievements = achievements[:stats['achievements']]
+        
+        for achievement in earned_achievements:
+            st.success(achievement)
     """Demonstration of LLM integration for different learning scenarios"""
     st.title("🤖 AI Learning Models Integration")
     
@@ -1341,9 +1598,9 @@ def main():
         # Navigation menu
         if user_data['role'] == 'Student':
             if 'assessment_results' not in st.session_state or not st.session_state.assessment_results:
-                page = st.selectbox("Navigate", ["Assessment", "Dashboard", "AI Models Demo"])
+                page = st.selectbox("Navigate", ["Assessment", "Dashboard", "Practice", "AI Models Demo"])
             else:
-                page = st.selectbox("Navigate", ["Dashboard", "Assessment", "AI Models Demo"])
+                page = st.selectbox("Navigate", ["Dashboard", "Practice", "Assessment", "AI Models Demo"])
         else:
             page = st.selectbox("Navigate", ["Dashboard", "AI Models Demo"])
         
