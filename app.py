@@ -29,39 +29,7 @@ if 'learning_progress' not in st.session_state:
 if 'assessment_results' not in st.session_state:
     st.session_state.assessment_results = {}
 
-# Sample data for demonstration
-SAMPLE_USERS = {
-    "student1": {
-        "name": "Alex Johnson",
-        "role": "Student",
-        "age": 16,
-        "grade": "10th Grade",
-        "learning_style": "Visual",
-        "strengths": ["Mathematics", "Physics"],
-        "weaknesses": ["Literature", "History"],
-        "progress": {
-            "Mathematics": 85,
-            "Physics": 78,
-            "Chemistry": 65,
-            "Literature": 45,
-            "History": 40
-        }
-    },
-    "tutor1": {
-        "name": "Dr. Sarah Williams",
-        "role": "Tutor",
-        "specialization": ["Mathematics", "Physics", "Chemistry"],
-        "students": ["Alex Johnson", "Emma Davis", "Michael Chen"]
-    },
-    "parent1": {
-        "name": "Jennifer Johnson",
-        "role": "Parent",
-        "children": ["Alex Johnson"]
-    },
-    "teacher1": {
-        "name": "Prof. Robert Miller",
-        "role": "Teacher",
-        "subjects": ["Mathematics", "Physics"],
+"],
         "class_size": 28
     }
 }
@@ -125,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 def login_page():
-    """Registration page"""
+    """Login and Registration page"""
     st.markdown("""
     <div class="main-header">
         <h1>🎓 EduTech AI Learning Platform</h1>
@@ -136,121 +104,192 @@ def login_page():
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
-        st.subheader("Welcome! Let's get you started")
+        # Toggle between Sign In and Register
+        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
         
-        with st.form("registration_form"):
-            st.subheader("Create Your Account")
+        with tab1:
+            st.subheader("Welcome Back!")
             
-            name = st.text_input("Full Name *", placeholder="Enter your full name")
-            email = st.text_input("Email Address *", placeholder="Enter your email")
-            password = st.text_input("Password *", type="password", placeholder="Create a password")
-            
-            st.markdown("---")
-            st.subheader("What's your role?")
-            
-            role = st.selectbox("I am a...", [
-                "",
-                "Student - I want to learn and improve my skills",
-                "Tutor - I want to help students learn effectively", 
-                "Parent - I want to monitor my child's progress",
-                "Teacher - I want to manage my classroom",
-                "Expert - I want to create educational content"
-            ])
-            
-            # Additional fields based on role selection
-            if "Student" in str(role):
-                st.markdown("### Tell us about yourself")
-                age = st.number_input("Age", min_value=5, max_value=25, value=16)
-                grade = st.selectbox("Grade Level", 
-                                   ["", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "University"])
-                learning_style = st.multiselect("How do you prefer to learn? (Select all that apply)", LEARNING_STYLES)
-                subjects_interest = st.multiselect("What subjects interest you?", SUBJECTS)
+            with st.form("signin_form"):
+                email = st.text_input("Email Address", placeholder="Enter your email")
+                password = st.text_input("Password", type="password", placeholder="Enter your password")
                 
-            elif "Tutor" in str(role):
-                st.markdown("### Tutor Information")
-                specialization = st.multiselect("Your specialization subjects", SUBJECTS)
-                experience = st.selectbox("Years of tutoring experience", ["Less than 1 year", "1-3 years", "3-5 years", "5+ years"])
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    signin_submitted = st.form_submit_button("Sign In", use_container_width=True)
+                with col_b:
+                    demo_mode = st.form_submit_button("Try Demo", use_container_width=True)
                 
-            elif "Parent" in str(role):
-                st.markdown("### Parent Information")
-                num_children = st.number_input("Number of children", min_value=1, max_value=10, value=1)
-                children_ages = st.text_input("Children's ages (separated by commas)", placeholder="e.g., 8, 12, 16")
+                if signin_submitted:
+                    if not email or not password:
+                        st.error("Please enter both email and password.")
+                    else:
+                        # Check if user exists
+                        user_found = None
+                        for user_id, user_data in st.session_state.all_users.items():
+                            if user_data.get("email") == email:
+                                user_found = user_id
+                                break
+                        
+                        if user_found:
+                            st.session_state.current_user = user_found
+                            st.success(f"Welcome back, {st.session_state.all_users[user_found]['name']}! 🎉")
+                            time.sleep(1)
+                            st.rerun()
+                        else:
+                            st.error("Account not found. Please check your email or create a new account.")
                 
-            elif "Teacher" in str(role):
-                st.markdown("### Teacher Information")
-                subjects_taught = st.multiselect("Subjects you teach", SUBJECTS)
-                grade_levels = st.multiselect("Grade levels you teach", 
-                                            ["Elementary", "Middle School", "High School", "University"])
-                
-            elif "Expert" in str(role):
-                st.markdown("### Expert Information")
-                expertise_areas = st.multiselect("Your areas of expertise", SUBJECTS)
-                credentials = st.text_area("Brief description of your credentials", 
-                                         placeholder="PhD in Mathematics, 10 years industry experience...")
-            
-            # Terms and conditions
-            st.markdown("---")
-            agree_terms = st.checkbox("I agree to the Terms of Service and Privacy Policy")
-            
-            submitted = st.form_submit_button("Create Account", use_container_width=True)
-            
-            if submitted:
-                if not name or not email or not password or not role or not agree_terms:
-                    st.error("Please fill in all required fields and agree to the terms.")
-                elif not role.strip():
-                    st.error("Please select your role.")
-                else:
-                    # Extract role from selection
-                    user_role = role.split(" - ")[0]
-                    
-                    # Create new user data
-                    new_user_id = f"user_{len(SAMPLE_USERS) + 1}"
-                    user_data = {
-                        "name": name,
-                        "role": user_role,
-                        "email": email
+                if demo_mode:
+                    # Show demo user options
+                    st.subheader("Try Demo Account")
+                    demo_options = {
+                        "Demo Student": "demo_student",
+                        "Demo Tutor": "demo_tutor", 
+                        "Demo Parent": "demo_parent",
+                        "Demo Teacher": "demo_teacher"
                     }
                     
-                    # Add role-specific data
-                    if user_role == "Student":
-                        user_data.update({
-                            "age": age,
-                            "grade": grade,
-                            "learning_style": learning_style,
-                            "subjects_interest": subjects_interest,
-                            "progress": {subject: random.randint(40, 90) for subject in subjects_interest[:5]}
-                        })
-                    elif user_role == "Tutor":
-                        user_data.update({
-                            "specialization": specialization,
-                            "experience": experience,
-                            "students": []
-                        })
-                    elif user_role == "Parent":
-                        user_data.update({
-                            "num_children": num_children,
-                            "children_ages": children_ages,
-                            "children": [f"Child {i+1}" for i in range(num_children)]
-                        })
-                    elif user_role == "Teacher":
-                        user_data.update({
-                            "subjects": subjects_taught,
-                            "grade_levels": grade_levels,
-                            "class_size": random.randint(20, 35)
-                        })
-                    elif user_role == "Expert":
-                        user_data.update({
-                            "expertise_areas": expertise_areas,
-                            "credentials": credentials
-                        })
+                    selected_demo = st.selectbox("Choose demo role:", list(demo_options.keys()))
                     
-                    # Store user data
-                    SAMPLE_USERS[new_user_id] = user_data
-                    st.session_state.current_user = new_user_id
+                    if st.button("Enter Demo", use_container_width=True):
+                        st.session_state.current_user = demo_options[selected_demo]
+                        st.success(f"Entering demo as {selected_demo}...")
+                        time.sleep(1)
+                        st.rerun()
+        
+        with tab2:
+            st.subheader("Join EduTech Today!")
+            
+            with st.form("registration_form"):
+                name = st.text_input("Full Name *", placeholder="Enter your full name")
+                email = st.text_input("Email Address *", placeholder="Enter your email")
+                password = st.text_input("Password *", type="password", placeholder="Create a password")
+                confirm_password = st.text_input("Confirm Password *", type="password", placeholder="Confirm your password")
+                
+                st.markdown("---")
+                st.subheader("What's your role?")
+                
+                role = st.selectbox("I am a...", [
+                    "",
+                    "Student - I want to learn and improve my skills",
+                    "Tutor - I want to help students learn effectively", 
+                    "Parent - I want to monitor my child's progress",
+                    "Teacher - I want to manage my classroom",
+                    "Expert - I want to create educational content"
+                ])
+                
+                # Additional fields based on role selection
+                age, grade, learning_style, subjects_interest = None, None, [], []
+                specialization, experience = [], ""
+                num_children, children_ages = 1, ""
+                subjects_taught, grade_levels = [], []
+                expertise_areas, credentials = [], ""
+                
+                if "Student" in str(role):
+                    st.markdown("### Tell us about yourself")
+                    age = st.number_input("Age", min_value=5, max_value=25, value=16)
+                    grade = st.selectbox("Grade Level", 
+                                       ["", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "University"])
+                    learning_style = st.multiselect("How do you prefer to learn? (Select all that apply)", LEARNING_STYLES)
+                    subjects_interest = st.multiselect("What subjects interest you?", SUBJECTS)
                     
-                    st.success(f"Welcome to EduTech AI Learning Platform, {name}! 🎉")
-                    time.sleep(2)
-                    st.rerun()
+                elif "Tutor" in str(role):
+                    st.markdown("### Tutor Information")
+                    specialization = st.multiselect("Your specialization subjects", SUBJECTS)
+                    experience = st.selectbox("Years of tutoring experience", ["Less than 1 year", "1-3 years", "3-5 years", "5+ years"])
+                    
+                elif "Parent" in str(role):
+                    st.markdown("### Parent Information")
+                    num_children = st.number_input("Number of children", min_value=1, max_value=10, value=1)
+                    children_ages = st.text_input("Children's ages (separated by commas)", placeholder="e.g., 8, 12, 16")
+                    
+                elif "Teacher" in str(role):
+                    st.markdown("### Teacher Information")
+                    subjects_taught = st.multiselect("Subjects you teach", SUBJECTS)
+                    grade_levels = st.multiselect("Grade levels you teach", 
+                                                ["Elementary", "Middle School", "High School", "University"])
+                    
+                elif "Expert" in str(role):
+                    st.markdown("### Expert Information")
+                    expertise_areas = st.multiselect("Your areas of expertise", SUBJECTS)
+                    credentials = st.text_area("Brief description of your credentials", 
+                                             placeholder="PhD in Mathematics, 10 years industry experience...")
+                
+                # Terms and conditions
+                st.markdown("---")
+                agree_terms = st.checkbox("I agree to the Terms of Service and Privacy Policy")
+                
+                submitted = st.form_submit_button("Create Account", use_container_width=True)
+                
+                if submitted:
+                    # Validation
+                    if not name or not email or not password or not confirm_password or not role or not agree_terms:
+                        st.error("Please fill in all required fields and agree to the terms.")
+                    elif not role.strip():
+                        st.error("Please select your role.")
+                    elif password != confirm_password:
+                        st.error("Passwords do not match.")
+                    elif len(password) < 6:
+                        st.error("Password must be at least 6 characters long.")
+                    else:
+                        # Check if email already exists
+                        email_exists = any(user_data.get("email") == email for user_data in st.session_state.all_users.values())
+                        
+                        if email_exists:
+                            st.error("An account with this email already exists. Please sign in instead.")
+                        else:
+                            # Extract role from selection
+                            user_role = role.split(" - ")[0]
+                            
+                            # Create new user data
+                            new_user_id = f"user_{len(st.session_state.all_users) + 1}"
+                            user_data = {
+                                "name": name,
+                                "role": user_role,
+                                "email": email,
+                                "password": password  # In a real app, this would be hashed
+                            }
+                            
+                            # Add role-specific data
+                            if user_role == "Student":
+                                user_data.update({
+                                    "age": age,
+                                    "grade": grade,
+                                    "learning_style": learning_style,
+                                    "subjects_interest": subjects_interest,
+                                    "progress": {subject: random.randint(40, 90) for subject in subjects_interest[:5]} if subjects_interest else {}
+                                })
+                            elif user_role == "Tutor":
+                                user_data.update({
+                                    "specialization": specialization,
+                                    "experience": experience,
+                                    "students": []
+                                })
+                            elif user_role == "Parent":
+                                user_data.update({
+                                    "num_children": num_children,
+                                    "children_ages": children_ages,
+                                    "children": [f"Child {i+1}" for i in range(num_children)]
+                                })
+                            elif user_role == "Teacher":
+                                user_data.update({
+                                    "subjects": subjects_taught,
+                                    "grade_levels": grade_levels,
+                                    "class_size": random.randint(20, 35)
+                                })
+                            elif user_role == "Expert":
+                                user_data.update({
+                                    "expertise_areas": expertise_areas,
+                                    "credentials": credentials
+                                })
+                            
+                            # Store user data
+                            st.session_state.all_users[new_user_id] = user_data
+                            st.session_state.current_user = new_user_id
+                            
+                            st.success(f"Welcome to EduTech AI Learning Platform, {name}! 🎉")
+                            time.sleep(2)
+                            st.rerun()
 
 def intake_assessment():
     """Adaptive intake assessment"""
@@ -315,7 +354,7 @@ def intake_assessment():
 
 def student_dashboard():
     """Student dashboard with personalized learning"""
-    user_data = SAMPLE_USERS[st.session_state.current_user]
+    user_data = st.session_state.all_users[st.session_state.current_user]
     
     st.title(f"Welcome back, {user_data['name']}! 🎓")
     
@@ -361,16 +400,26 @@ def student_dashboard():
     # Subject Progress
     st.subheader("📈 Subject Progress")
     
-    progress_data = pd.DataFrame([
-        {"Subject": subject, "Progress": progress}
-        for subject, progress in user_data["progress"].items()
-    ])
+    # Use user's actual progress or create sample data
+    if user_data.get("progress"):
+        progress_data = pd.DataFrame([
+            {"Subject": subject, "Progress": progress}
+            for subject, progress in user_data["progress"].items()
+        ])
+    else:
+        # Default progress for users without specific progress data
+        default_subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Chemistry", "Literature"])
+        progress_data = pd.DataFrame([
+            {"Subject": subject, "Progress": random.randint(40, 90)}
+            for subject in default_subjects[:4]
+        ])
     
-    fig = px.bar(progress_data, x="Subject", y="Progress", 
-                 color="Progress", color_continuous_scale="viridis",
-                 title="Your Learning Progress by Subject")
-    fig.update_layout(showlegend=False)
-    st.plotly_chart(fig, use_container_width=True)
+    if not progress_data.empty:
+        fig = px.bar(progress_data, x="Subject", y="Progress", 
+                     color="Progress", color_continuous_scale="viridis",
+                     title="Your Learning Progress by Subject")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
     
     # Learning Path
     col1, col2 = st.columns(2)
@@ -378,12 +427,28 @@ def student_dashboard():
     with col1:
         st.subheader("🎯 Today's Learning Plan")
         
-        learning_tasks = [
-            {"task": "Complete Algebra Chapter 5", "time": "45 min", "type": "Mathematics"},
-            {"task": "Physics: Newton's Laws Practice", "time": "30 min", "type": "Physics"},
-            {"task": "Literature: Essay Writing", "time": "40 min", "type": "Literature"},
-            {"task": "History: World War II Timeline", "time": "35 min", "type": "History"}
-        ]
+        # Generate learning tasks based on user's interests
+        subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Literature", "History"])
+        learning_tasks = []
+        
+        for i, subject in enumerate(subjects[:4]):
+            tasks = {
+                "Mathematics": "Complete Algebra Chapter 5",
+                "Physics": "Newton's Laws Practice", 
+                "Chemistry": "Chemical Bonding Exercises",
+                "Literature": "Essay Writing Practice",
+                "History": "World War II Timeline",
+                "Biology": "Cell Structure Study",
+                "Geography": "Climate Zones Review",
+                "Economics": "Supply and Demand Analysis"
+            }
+            
+            task_name = tasks.get(subject, f"{subject} Practice Session")
+            learning_tasks.append({
+                "task": task_name,
+                "time": f"{random.randint(25, 50)} min",
+                "type": subject
+            })
         
         for task in learning_tasks:
             with st.expander(f"📚 {task['task']} ({task['time']})"):
@@ -471,11 +536,75 @@ def student_dashboard():
                 <li>Practice essay writing</li>
             </ul>
         </div>
+        """, unsafe_allow_html=True)<div class="chat-message user-message">👤 {message["content"]}</div>', 
+                          unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="chat-message ai-message">🤖 {message["content"]}</div>', 
+                          unsafe_allow_html=True)
+        
+        user_input = st.text_input("Type your question here...", key="chat_input")
+        
+        if st.button("Send") and user_input:
+            # Add user message
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            
+            # Generate AI response (simulated)
+            ai_responses = [
+                "Great question! Let me help you understand this concept step by step...",
+                "I can see you're working on this topic. Here's a different approach that might help...",
+                "That's a common challenge! Let's break it down using your preferred visual learning style...",
+                "Excellent! You're making good progress. Here's what to focus on next..."
+            ]
+            
+            ai_response = random.choice(ai_responses)
+            st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+            
+            st.rerun()
+    
+    # Recommendations
+    st.subheader("💡 Personalized Recommendations")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="role-card">
+            <h4>📖 Recommended Resources</h4>
+            <ul>
+                <li>Khan Academy: Quadratic Equations</li>
+                <li>Crash Course Physics: Motion</li>
+                <li>Interactive Chemistry Lab Sim</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="role-card">
+            <h4>🎯 Focus Areas</h4>
+            <ul>
+                <li>Literature: Reading comprehension</li>
+                <li>History: Timeline memorization</li>
+                <li>Chemistry: Balancing equations</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="role-card">
+            <h4>🏆 Next Milestones</h4>
+            <ul>
+                <li>Complete 5 math problems</li>
+                <li>Read 2 history chapters</li>
+                <li>Practice essay writing</li>
+            </ul>
+        </div>
         """, unsafe_allow_html=True)
 
 def tutor_dashboard():
     """Tutor dashboard for managing students and sessions"""
-    user_data = SAMPLE_USERS[st.session_state.current_user]
+    user_data = st.session_state.all_users[st.session_state.current_user]
     
     st.title(f"Tutor Dashboard - {user_data['name']} 👨‍🏫")
     
@@ -595,13 +724,24 @@ def tutor_dashboard():
 
 def parent_dashboard():
     """Parent dashboard for monitoring child's progress"""
-    user_data = SAMPLE_USERS[st.session_state.current_user]
+    user_data = st.session_state.all_users[st.session_state.current_user]
     
     st.title(f"Parent Dashboard - {user_data['name']} 👨‍👩‍👧‍👦")
     
     # Child selection
-    child_name = st.selectbox("Select Child", user_data["children"])
-    child_data = SAMPLE_USERS["student1"]  # Using sample student data
+    children = user_data.get("children", ["Child 1"])
+    child_name = st.selectbox("Select Child", children)
+    
+    # Use demo student data for child progress
+    child_data = {
+        "progress": {
+            "Mathematics": 85,
+            "Physics": 78,
+            "Chemistry": 65,
+            "Literature": 45,
+            "History": 40
+        }
+    }
     
     # Overview metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -720,7 +860,7 @@ def parent_dashboard():
 
 def teacher_dashboard():
     """Teacher dashboard for classroom management"""
-    user_data = SAMPLE_USERS[st.session_state.current_user]
+    user_data = st.session_state.all_users[st.session_state.current_user]
     
     st.title(f"Teacher Dashboard - {user_data['name']} 👨‍🏫")
     
@@ -811,6 +951,32 @@ def teacher_dashboard():
         for topic in curriculum_topics:
             progress = topic["Progress"]
             if progress == 100:
+                status_icon = "✅"
+            elif progress > 0:
+                status_icon = "🔄"
+            else:
+                status_icon = "⏳"
+            
+            st.markdown(f"""
+            {status_icon} **{topic['Topic']}**  
+            Progress: {progress}% | Status: {topic['Status']}
+            """)
+            
+            if progress < 100:
+                st.progress(progress / 100)
+        
+        st.subheader("🎯 Assignment Creation")
+        
+        with st.form("create_assignment"):
+            assignment_title = st.text_input("Assignment Title")
+            assignment_subject = st.selectbox("Subject", user_data.get("subjects", SUBJECTS))
+            assignment_type = st.selectbox("Type", ["Quiz", "Homework", "Project", "Test"])
+            due_date = st.date_input("Due Date")
+            
+            submitted = st.form_submit_button("Create Assignment")
+            
+            if submitted and assignment_title:
+                st.success(f"Assignment '{assignment_title}' created successfully!")
                 status_icon = "✅"
             elif progress > 0:
                 status_icon = "🔄"
@@ -1036,7 +1202,7 @@ def main():
         return
     
     # Get current user data
-    user_data = SAMPLE_USERS[st.session_state.current_user]
+    user_data = st.session_state.all_users[st.session_state.current_user]
     
     # Sidebar navigation
     with st.sidebar:
