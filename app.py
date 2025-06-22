@@ -38,7 +38,7 @@ SUBJECTS = ["Mathematics", "Physics", "Chemistry", "Literature", "History", "Bio
 LEARNING_STYLES = ["Visual", "Auditory", "Kinesthetic", "Reading/Writing"]
 LLM_MODELS = {
     "GPT-4": "Primary tutoring, creative writing, complex problem-solving",
-    "Claude": "Content summarization, reading comprehension, academic discussions",
+    "Claude": "Content summarization, reading comprehension, academic discussions", 
     "Perplexity": "Research assistance, fact-checking, current events",
     "Gemini": "Multimodal analysis, mathematical problem solving",
     "Grok": "Conversational practice, engagement-focused interactions"
