@@ -28,17 +28,61 @@ if 'learning_progress' not in st.session_state:
     st.session_state.learning_progress = {}
 if 'assessment_results' not in st.session_state:
     st.session_state.assessment_results = {}
+if 'all_users' not in st.session_state:
+    st.session_state.all_users = {}
 
-"],
+# Sample data for demonstration (demo users)
+DEMO_USERS = {
+    "demo_student": {
+        "name": "Demo Student",
+        "role": "Student",
+        "email": "student@demo.com",
+        "age": 16,
+        "grade": "10th Grade",
+        "learning_style": ["Visual"],
+        "subjects_interest": ["Mathematics", "Physics"],
+        "progress": {
+            "Mathematics": 85,
+            "Physics": 78,
+            "Chemistry": 65,
+            "Literature": 45,
+            "History": 40
+        }
+    },
+    "demo_tutor": {
+        "name": "Demo Tutor",
+        "role": "Tutor",
+        "email": "tutor@demo.com",
+        "specialization": ["Mathematics", "Physics", "Chemistry"],
+        "experience": "5+ years",
+        "students": ["Demo Student"]
+    },
+    "demo_parent": {
+        "name": "Demo Parent",
+        "role": "Parent",
+        "email": "parent@demo.com",
+        "num_children": 1,
+        "children": ["Demo Student"]
+    },
+    "demo_teacher": {
+        "name": "Demo Teacher",
+        "role": "Teacher",
+        "email": "teacher@demo.com",
+        "subjects": ["Mathematics", "Physics"],
+        "grade_levels": ["High School"],
         "class_size": 28
     }
 }
+
+# Initialize demo users in session state
+if not st.session_state.all_users:
+    st.session_state.all_users = DEMO_USERS.copy()
 
 SUBJECTS = ["Mathematics", "Physics", "Chemistry", "Literature", "History", "Biology", "Geography", "Economics"]
 LEARNING_STYLES = ["Visual", "Auditory", "Kinesthetic", "Reading/Writing"]
 LLM_MODELS = {
     "GPT-4": "Primary tutoring, creative writing, complex problem-solving",
-    "Claude": "Content summarization, reading comprehension, academic discussions", 
+    "Claude": "Content summarization, reading comprehension, academic discussions",
     "Perplexity": "Research assistance, fact-checking, current events",
     "Gemini": "Multimodal analysis, mathematical problem solving",
     "Grok": "Conversational practice, engagement-focused interactions"
@@ -295,7 +339,7 @@ def intake_assessment():
     """Adaptive intake assessment"""
     st.header("📋 Personalized Learning Assessment")
     
-    user_data = SAMPLE_USERS[st.session_state.current_user]
+    user_data = st.session_state.all_users[st.session_state.current_user]
     
     if user_data["role"] == "Student":
         st.subheader("Let's understand your learning preferences!")
@@ -473,70 +517,6 @@ def student_dashboard():
         for message in st.session_state.chat_history[-5:]:  # Show last 5 messages
             if message["role"] == "user":
                 st.markdown(f'<div class="chat-message user-message">👤 {message["content"]}</div>', 
-                          unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="chat-message ai-message">🤖 {message["content"]}</div>', 
-                          unsafe_allow_html=True)
-        
-        user_input = st.text_input("Type your question here...", key="chat_input")
-        
-        if st.button("Send") and user_input:
-            # Add user message
-            st.session_state.chat_history.append({"role": "user", "content": user_input})
-            
-            # Generate AI response (simulated)
-            ai_responses = [
-                "Great question! Let me help you understand this concept step by step...",
-                "I can see you're working on this topic. Here's a different approach that might help...",
-                "That's a common challenge! Let's break it down using your preferred visual learning style...",
-                "Excellent! You're making good progress. Here's what to focus on next..."
-            ]
-            
-            ai_response = random.choice(ai_responses)
-            st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
-            
-            st.rerun()
-    
-    # Recommendations
-    st.subheader("💡 Personalized Recommendations")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        <div class="role-card">
-            <h4>📖 Recommended Resources</h4>
-            <ul>
-                <li>Khan Academy: Quadratic Equations</li>
-                <li>Crash Course Physics: Motion</li>
-                <li>Interactive Chemistry Lab Sim</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("""
-        <div class="role-card">
-            <h4>🎯 Focus Areas</h4>
-            <ul>
-                <li>Literature: Reading comprehension</li>
-                <li>History: Timeline memorization</li>
-                <li>Chemistry: Balancing equations</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("""
-        <div class="role-card">
-            <h4>🏆 Next Milestones</h4>
-            <ul>
-                <li>Complete 5 math problems</li>
-                <li>Read 2 history chapters</li>
-                <li>Practice essay writing</li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)<div class="chat-message user-message">👤 {message["content"]}</div>', 
                           unsafe_allow_html=True)
             else:
                 st.markdown(f'<div class="chat-message ai-message">🤖 {message["content"]}</div>', 
@@ -970,32 +950,6 @@ def teacher_dashboard():
         with st.form("create_assignment"):
             assignment_title = st.text_input("Assignment Title")
             assignment_subject = st.selectbox("Subject", user_data.get("subjects", SUBJECTS))
-            assignment_type = st.selectbox("Type", ["Quiz", "Homework", "Project", "Test"])
-            due_date = st.date_input("Due Date")
-            
-            submitted = st.form_submit_button("Create Assignment")
-            
-            if submitted and assignment_title:
-                st.success(f"Assignment '{assignment_title}' created successfully!")
-                status_icon = "✅"
-            elif progress > 0:
-                status_icon = "🔄"
-            else:
-                status_icon = "⏳"
-            
-            st.markdown(f"""
-            {status_icon} **{topic['Topic']}**  
-            Progress: {progress}% | Status: {topic['Status']}
-            """)
-            
-            if progress < 100:
-                st.progress(progress / 100)
-        
-        st.subheader("🎯 Assignment Creation")
-        
-        with st.form("create_assignment"):
-            assignment_title = st.text_input("Assignment Title")
-            assignment_subject = st.selectbox("Subject", user_data["subjects"])
             assignment_type = st.selectbox("Type", ["Quiz", "Homework", "Project", "Test"])
             due_date = st.date_input("Due Date")
             
