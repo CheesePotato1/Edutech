@@ -1,0 +1,753 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import json
+import random
+from typing import Dict, List, Any
+import time
+
+# Page configuration
+st.set_page_config(
+    page_title="EduTech AI Learning Platform",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize session state
+if 'user_data' not in st.session_state:
+    st.session_state.user_data = {}
+if 'current_user' not in st.session_state:
+    st.session_state.current_user = None
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+if 'learning_progress' not in st.session_state:
+    st.session_state.learning_progress = {}
+if 'assessment_results' not in st.session_state:
+    st.session_state.assessment_results = {}
+
+# Sample data for demonstration
+SAMPLE_USERS = {
+    "student1": {
+        "name": "Alex Johnson",
+        "role": "Student",
+        "age": 16,
+        "grade": "10th Grade",
+        "learning_style": "Visual",
+        "strengths": ["Mathematics", "Physics"],
+        "weaknesses": ["Literature", "History"],
+        "progress": {
+            "Mathematics": 85,
+            "Physics": 78,
+            "Chemistry": 65,
+            "Literature": 45,
+            "History": 40
+        }
+    },
+    "tutor1": {
+        "name": "Dr. Sarah Williams",
+        "role": "Tutor",
+        "specialization": ["Mathematics", "Physics", "Chemistry"],
+        "students": ["Alex Johnson", "Emma Davis", "Michael Chen"]
+    },
+    "parent1": {
+        "name": "Jennifer Johnson",
+        "role": "Parent",
+        "children": ["Alex Johnson"]
+    },
+    "teacher1": {
+        "name": "Prof. Robert Miller",
+        "role": "Teacher",
+        "subjects": ["Mathematics", "Physics"],
+        "class_size": 28
+    }
+}
+
+SUBJECTS = ["Mathematics", "Physics", "Chemistry", "Literature", "History", "Biology", "Geography", "Economics"]
+LEARNING_STYLES = ["Visual", "Auditory", "Kinesthetic", "Reading/Writing"]
+LLM_MODELS = {
+    "GPT-4": "Primary tutoring, creative writing, complex problem-solving",
+    "Claude": "Content summarization, reading comprehension, academic discussions",
+    "Perplexity": "Research assistance, fact-checking, current events",
+    "Gemini": "Multimodal analysis, mathematical problem solving",
+    "Grok": "Conversational practice, engagement-focused interactions"
+}
+
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .role-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        margin: 1rem 0;
+    }
+    .progress-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+        margin: 0.5rem 0;
+    }
+    .metric-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .chat-message {
+        padding: 0.5rem;
+        margin: 0.5rem 0;
+        border-radius: 8px;
+    }
+    .user-message {
+        background: #e3f2fd;
+        margin-left: 2rem;
+    }
+    .ai-message {
+        background: #f3e5f5;
+        margin-right: 2rem;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def login_page():
+    """Login/Registration page"""
+    st.markdown("""
+    <div class="main-header">
+        <h1>🎓 EduTech AI Learning Platform</h1>
+        <p>Personalized Learning Experiences Powered by AI</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.subheader("Welcome! Please sign in or register")
+        
+        tab1, tab2 = st.tabs(["Sign In", "Register"])
+        
+        with tab1:
+            username = st.selectbox("Select Demo User", 
+                                   [""] + list(SAMPLE_USERS.keys()),
+                                   format_func=lambda x: f"{SAMPLE_USERS[x]['name']} ({SAMPLE_USERS[x]['role']})" if x else "Select a user...")
+            
+            if st.button("Sign In", use_container_width=True):
+                if username:
+                    st.session_state.current_user = username
+                    st.rerun()
+                else:
+                    st.error("Please select a user")
+        
+        with tab2:
+            with st.form("registration_form"):
+                st.subheader("Create New Account")
+                
+                name = st.text_input("Full Name")
+                email = st.text_input("Email")
+                role = st.selectbox("Role", ["Student", "Tutor", "Parent", "Teacher", "Expert"])
+                
+                if role == "Student":
+                    age = st.number_input("Age", min_value=5, max_value=25, value=16)
+                    grade = st.selectbox("Grade Level", 
+                                       ["K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "University"])
+                    learning_style = st.multiselect("Preferred Learning Style", LEARNING_STYLES)
+                
+                submitted = st.form_submit_button("Register", use_container_width=True)
+                
+                if submitted and name and email:
+                    st.success("Registration successful! Please sign in with your credentials.")
+
+def intake_assessment():
+    """Adaptive intake assessment"""
+    st.header("📋 Personalized Learning Assessment")
+    
+    user_data = SAMPLE_USERS[st.session_state.current_user]
+    
+    if user_data["role"] == "Student":
+        st.subheader("Let's understand your learning preferences!")
+        
+        with st.form("intake_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Learning Style Assessment")
+                learning_pref = st.radio(
+                    "How do you prefer to learn new concepts?",
+                    ["Visual (charts, diagrams, mind maps)",
+                     "Auditory (listening, discussions)",
+                     "Kinesthetic (hands-on activities)",
+                     "Reading/Writing (text-based)"]
+                )
+                
+                study_time = st.slider("Available study hours per day", 1, 8, 3)
+                
+                goals = st.multiselect(
+                    "Select your academic goals:",
+                    ["Improve grades", "Test preparation", "College readiness", 
+                     "Skill development", "Career preparation"]
+                )
+            
+            with col2:
+                st.subheader("Subject Assessment")
+                subjects_interest = st.multiselect("Subjects you enjoy:", SUBJECTS)
+                subjects_struggle = st.multiselect("Subjects you find challenging:", SUBJECTS)
+                
+                motivation = st.select_slider(
+                    "How motivated are you to learn?",
+                    options=["Low", "Moderate", "High", "Very High"]
+                )
+                
+                tech_comfort = st.select_slider(
+                    "How comfortable are you with technology?",
+                    options=["Beginner", "Intermediate", "Advanced", "Expert"]
+                )
+            
+            submitted = st.form_submit_button("Complete Assessment", use_container_width=True)
+            
+            if submitted:
+                st.session_state.assessment_results = {
+                    "learning_preference": learning_pref,
+                    "study_time": study_time,
+                    "goals": goals,
+                    "interests": subjects_interest,
+                    "struggles": subjects_struggle,
+                    "motivation": motivation,
+                    "tech_comfort": tech_comfort
+                }
+                st.success("Assessment completed! Your personalized learning plan is being generated...")
+                time.sleep(2)
+                st.rerun()
+
+def student_dashboard():
+    """Student dashboard with personalized learning"""
+    user_data = SAMPLE_USERS[st.session_state.current_user]
+    
+    st.title(f"Welcome back, {user_data['name']}! 🎓")
+    
+    # Progress Overview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📊 Overall Progress</h3>
+            <h2>72%</h2>
+            <p>Keep going!</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>🔥 Study Streak</h3>
+            <h2>15 days</h2>
+            <p>Amazing!</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>⏱️ Study Time Today</h3>
+            <h2>2.5 hrs</h2>
+            <p>On track</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>🏆 Achievements</h3>
+            <h2>12</h2>
+            <p>Badges earned</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Subject Progress
+    st.subheader("📈 Subject Progress")
+    
+    progress_data = pd.DataFrame([
+        {"Subject": subject, "Progress": progress}
+        for subject, progress in user_data["progress"].items()
+    ])
+    
+    fig = px.bar(progress_data, x="Subject", y="Progress", 
+                 color="Progress", color_continuous_scale="viridis",
+                 title="Your Learning Progress by Subject")
+    fig.update_layout(showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Learning Path
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 Today's Learning Plan")
+        
+        learning_tasks = [
+            {"task": "Complete Algebra Chapter 5", "time": "45 min", "type": "Mathematics"},
+            {"task": "Physics: Newton's Laws Practice", "time": "30 min", "type": "Physics"},
+            {"task": "Literature: Essay Writing", "time": "40 min", "type": "Literature"},
+            {"task": "History: World War II Timeline", "time": "35 min", "type": "History"}
+        ]
+        
+        for task in learning_tasks:
+            with st.expander(f"📚 {task['task']} ({task['time']})"):
+                st.write(f"**Subject:** {task['type']}")
+                st.write("**Learning Mode:** Interactive with AI tutor")
+                st.write("**Resources:** Video, Practice Problems, Mindmap")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button(f"Start Learning", key=f"start_{task['task']}"):
+                        st.success("Starting your personalized lesson...")
+                with col_b:
+                    if st.button(f"Get Help", key=f"help_{task['task']}"):
+                        st.info("Connecting you with AI tutor...")
+    
+    with col2:
+        st.subheader("🤖 AI Learning Assistant")
+        
+        # Chat Interface
+        st.write("Ask me anything about your studies!")
+        
+        for message in st.session_state.chat_history[-5:]:  # Show last 5 messages
+            if message["role"] == "user":
+                st.markdown(f'<div class="chat-message user-message">👤 {message["content"]}</div>', 
+                          unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="chat-message ai-message">🤖 {message["content"]}</div>', 
+                          unsafe_allow_html=True)
+        
+        user_input = st.text_input("Type your question here...", key="chat_input")
+        
+        if st.button("Send") and user_input:
+            # Add user message
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            
+            # Generate AI response (simulated)
+            ai_responses = [
+                "Great question! Let me help you understand this concept step by step...",
+                "I can see you're working on this topic. Here's a different approach that might help...",
+                "That's a common challenge! Let's break it down using your preferred visual learning style...",
+                "Excellent! You're making good progress. Here's what to focus on next..."
+            ]
+            
+            ai_response = random.choice(ai_responses)
+            st.session_state.chat_history.append({"role": "assistant", "content": ai_response})
+            
+            st.rerun()
+    
+    # Recommendations
+    st.subheader("💡 Personalized Recommendations")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="role-card">
+            <h4>📖 Recommended Resources</h4>
+            <ul>
+                <li>Khan Academy: Quadratic Equations</li>
+                <li>Crash Course Physics: Motion</li>
+                <li>Interactive Chemistry Lab Sim</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="role-card">
+            <h4>🎯 Focus Areas</h4>
+            <ul>
+                <li>Literature: Reading comprehension</li>
+                <li>History: Timeline memorization</li>
+                <li>Chemistry: Balancing equations</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="role-card">
+            <h4>🏆 Next Milestones</h4>
+            <ul>
+                <li>Complete 5 math problems</li>
+                <li>Read 2 history chapters</li>
+                <li>Practice essay writing</li>
+            </ul>
+        </div>
+        """, unsafe_allow_html=True)
+
+def tutor_dashboard():
+    """Tutor dashboard for managing students and sessions"""
+    user_data = SAMPLE_USERS[st.session_state.current_user]
+    
+    st.title(f"Tutor Dashboard - {user_data['name']} 👨‍🏫")
+    
+    # Quick Stats
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>👥 Active Students</h3>
+            <h2>15</h2>
+            <p>This week</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>⏰ Sessions Today</h3>
+            <h2>8</h2>
+            <p>Scheduled</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📈 Avg. Improvement</h3>
+            <h2>23%</h2>
+            <p>Student progress</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>⭐ Rating</h3>
+            <h2>4.9/5</h2>
+            <p>Student feedback</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Student Management
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("📊 Student Progress Overview")
+        
+        # Sample student data
+        student_data = pd.DataFrame([
+            {"Student": "Alex Johnson", "Subject": "Mathematics", "Progress": 85, "Last Session": "2 days ago", "Next Session": "Today 3 PM"},
+            {"Student": "Emma Davis", "Subject": "Physics", "Progress": 72, "Last Session": "1 day ago", "Next Session": "Tomorrow 10 AM"},
+            {"Student": "Michael Chen", "Subject": "Chemistry", "Progress": 68, "Last Session": "3 days ago", "Next Session": "Today 5 PM"},
+        ])
+        
+        st.dataframe(student_data, use_container_width=True)
+        
+        # Quick Session Prep
+        st.subheader("🎯 Quick Session Preparation")
+        
+        selected_student = st.selectbox("Select Student for Session Prep", student_data["Student"].tolist())
+        
+        if st.button("Generate Session Brief"):
+            st.success(f"Session brief generated for {selected_student}!")
+            
+            st.markdown("""
+            **Session Focus Areas:**
+            - Quadratic equations (struggling with factoring)
+            - Word problems (needs more practice)
+            - Graph interpretation (strength to leverage)
+            
+            **Recommended 10-minute Focus:**
+            1. Quick review of factoring methods (3 min)
+            2. Solve one challenging word problem together (5 min)
+            3. Preview next topics and assign practice (2 min)
+            
+            **AI Tutor Pre-work:** Student completed 80% of assigned problems, struggled with problems #7, #12, #15
+            """)
+    
+    with col2:
+        st.subheader("🔔 Today's Schedule")
+        
+        schedule = [
+            {"time": "10:00 AM", "student": "Sarah Kim", "subject": "Physics", "duration": "10 min"},
+            {"time": "11:30 AM", "student": "John Doe", "subject": "Mathematics", "duration": "10 min"},
+            {"time": "2:00 PM", "student": "Alex Johnson", "subject": "Mathematics", "duration": "10 min"},
+            {"time": "3:30 PM", "student": "Emma Davis", "subject": "Physics", "duration": "10 min"},
+            {"time": "5:00 PM", "student": "Michael Chen", "subject": "Chemistry", "duration": "10 min"},
+        ]
+        
+        for session in schedule:
+            with st.expander(f"{session['time']} - {session['student']}", expanded=False):
+                st.write(f"**Subject:** {session['subject']}")
+                st.write(f"**Duration:** {session['duration']}")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button("Start Session", key=f"start_{session['student']}"):
+                        st.success("Session started!")
+                with col_b:
+                    if st.button("View Prep", key=f"prep_{session['student']}"):
+                        st.info("Loading session materials...")
+    
+    # Performance Analytics
+    st.subheader("📈 Teaching Performance Analytics")
+    
+    # Student improvement over time
+    dates = pd.date_range(start='2024-01-01', end='2024-06-22', freq='W')
+    improvement_data = pd.DataFrame({
+        'Date': dates,
+        'Average Student Progress': np.random.normal(70, 10, len(dates)).cumsum() / len(dates) + 50
+    })
+    
+    fig = px.line(improvement_data, x='Date', y='Average Student Progress',
+                  title='Student Progress Improvement Over Time')
+    st.plotly_chart(fig, use_container_width=True)
+
+def parent_dashboard():
+    """Parent dashboard for monitoring child's progress"""
+    user_data = SAMPLE_USERS[st.session_state.current_user]
+    
+    st.title(f"Parent Dashboard - {user_data['name']} 👨‍👩‍👧‍👦")
+    
+    # Child selection
+    child_name = st.selectbox("Select Child", user_data["children"])
+    child_data = SAMPLE_USERS["student1"]  # Using sample student data
+    
+    # Overview metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📚 Study Time</h3>
+            <h2>18.5 hrs</h2>
+            <p>This week</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📈 Improvement</h3>
+            <h2>+15%</h2>
+            <p>Overall progress</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>🎯 Goals Met</h3>
+            <h2>7/10</h2>
+            <p>This month</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>🏆 Achievements</h3>
+            <h2>3 new</h2>
+            <p>Badges earned</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📊 Academic Progress")
+        
+        # Progress chart
+        progress_df = pd.DataFrame([
+            {"Subject": subject, "Progress": progress, "Target": 80}
+            for subject, progress in child_data["progress"].items()
+        ])
+        
+        fig = go.Figure()
+        fig.add_trace(go.Bar(name='Current Progress', x=progress_df['Subject'], y=progress_df['Progress']))
+        fig.add_trace(go.Scatter(name='Target', x=progress_df['Subject'], y=progress_df['Target'], 
+                                mode='markers', marker=dict(color='red', size=10, symbol='diamond')))
+        
+        fig.update_layout(title='Subject-wise Progress vs Targets')
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Knowledge gaps
+        st.subheader("🎯 Areas Needing Attention")
+        
+        weak_subjects = [subject for subject, progress in child_data["progress"].items() if progress < 60]
+        
+        for subject in weak_subjects:
+            progress = child_data["progress"][subject]
+            st.markdown(f"""
+            <div class="role-card">
+                <h4>{subject}</h4>
+                <p><strong>Current Level:</strong> {progress}%</p>
+                <p><strong>Recommended Action:</strong> Additional practice sessions</p>
+                <p><strong>Resources:</strong> Extra worksheets, online tutorials</p>
+            </div>
+            """, unsafe_allow_html=True)
+    
+    with col2:
+        st.subheader("📅 Weekly Activity Summary")
+        
+        # Activity timeline
+        activities = [
+            {"Date": "June 22", "Activity": "Mathematics Quiz", "Score": "85%", "Status": "Completed"},
+            {"Date": "June 21", "Activity": "Physics Lab Simulation", "Score": "78%", "Status": "Completed"},
+            {"Date": "June 20", "Activity": "Literature Essay", "Score": "Pending", "Status": "In Progress"},
+            {"Date": "June 19", "Activity": "History Timeline Project", "Score": "92%", "Status": "Completed"},
+        ]
+        
+        for activity in activities:
+            status_color = "🟢" if activity["Status"] == "Completed" else "🟡"
+            st.markdown(f"""
+            {status_color} **{activity['Date']}** - {activity['Activity']}  
+            Score: {activity['Score']} | Status: {activity['Status']}
+            """)
+        
+        st.subheader("💡 How You Can Help")
+        
+        recommendations = [
+            "Review literature reading comprehension techniques together",
+            "Practice history timeline memorization with flashcards",
+            "Encourage consistent study schedule (2 hours daily)",
+            "Celebrate achievements in Mathematics and Physics"
+        ]
+        
+        for i, rec in enumerate(recommendations, 1):
+            st.markdown(f"{i}. {rec}")
+        
+        # Communication with tutors
+        st.subheader("💬 Tutor Communication")
+        
+        if st.button("Schedule Parent-Tutor Meeting"):
+            st.success("Meeting request sent! You'll receive a confirmation email.")
+        
+        if st.button("Send Message to Tutor"):
+            st.text_area("Message", placeholder="Type your message to the tutor...")
+            if st.button("Send"):
+                st.success("Message sent successfully!")
+
+def teacher_dashboard():
+    """Teacher dashboard for classroom management"""
+    user_data = SAMPLE_USERS[st.session_state.current_user]
+    
+    st.title(f"Teacher Dashboard - {user_data['name']} 👨‍🏫")
+    
+    # Class Overview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>👥 Total Students</h3>
+            <h2>28</h2>
+            <p>Active learners</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📈 Class Average</h3>
+            <h2>76%</h2>
+            <p>Overall progress</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>📚 Assignments</h3>
+            <h2>5</h2>
+            <p>Pending review</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown("""
+        <div class="metric-card">
+            <h3>⚠️ At Risk</h3>
+            <h2>3</h2>
+            <p>Students need help</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Class Performance
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("📊 Class Performance Distribution")
+        
+        # Generate sample grade distribution
+        grades = np.random.normal(75, 15, 28)
+        grades = np.clip(grades, 0, 100)
+        
+        fig = px.histogram(x=grades, nbins=10, title="Grade Distribution",
+                          labels={'x': 'Grades', 'y': 'Number of Students'})
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Students needing attention
+        st.subheader("🚨 Students Requiring Attention")
+        
+        at_risk_students = [
+            {"Name": "John Smith", "Average": "45%", "Issues": "Math fundamentals, attendance"},
+            {"Name": "Lisa Wang", "Average": "52%", "Issues": "Reading comprehension"},
+            {"Name": "Carlos Rodriguez", "Average": "48%", "Issues": "Language barrier, homework completion"}
+        ]
+        
+        for student in at_risk_students:
+            with st.expander(f"⚠️ {student['Name']} - {student['Average']}"):
+                st.write(f"**Issues:** {student['Issues']}")
+                st.write("**Recommended Actions:**")
+                st.write("- One-on-one tutoring sessions")
+                st.write("- Parent conference")
+                st.write("- Modified assignments")
+                
+                if st.button(f"Create Intervention Plan", key=f"intervention_{student['Name']}"):
+                    st.success("Intervention plan created and sent to student's support team!")
+    
+    with col2:
+        st.subheader("📅 Curriculum Progress")
+        
+        curriculum_topics = [
+            {"Topic": "Algebra Fundamentals", "Progress": 100, "Status": "Completed"},
+            {"Topic": "Quadratic Equations", "Progress": 85, "Status": "In Progress"},
+            {"Topic": "Functions and Graphs", "Progress": 60, "Status": "In Progress"},
+            {"Topic": "Trigonometry Basics", "Progress": 0, "Status": "Not Started"},
+            {"Topic": "Statistics Introduction", "Progress": 0, "Status": "Not Started"},
+        ]
+        
+        for topic in curriculum_topics:
+            progress = topic["Progress"]
+            if progress == 100:
+                status_icon = "✅"
+            elif progress > 0:
+                status_icon = "🔄"
+            else:
+                status_icon = "⏳"
+            
+            st.markdown(f"""
+            {status_icon} **{topic['Topic']}**  
+            Progress: {progress}% | Status: {topic['Status']}
+            """)
+            
+            if progress < 100:
+                st.progress(progress / 100)
+        
+        st.subheader("🎯 Assignment Creation")
+        
+        with st.form("create_assignment"):
+            assignment_title = st.text_input("Assignment Title")
+            assignment_subject = st.selectbox("Subject", user_data["subjects"])
+            assignment_type = st.selectbox("Type", ["Quiz", "Homework", "Project", "Test"])
+            due_date
