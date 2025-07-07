@@ -1,599 +1,4 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
-from datetime import datetime, timedelta
-import json
-import random
-from typing import Dict, List, Any
-import time
-
-# Page configuration
-st.set_page_config(
-    page_title="EduTech AI Learning Platform",
-    page_icon="🎓",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-# Initialize session state
-if 'user_data' not in st.session_state:
-    st.session_state.user_data = {}
-if 'current_user' not in st.session_state:
-    st.session_state.current_user = None
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'learning_progress' not in st.session_state:
-    st.session_state.learning_progress = {}
-if 'assessment_results' not in st.session_state:
-    st.session_state.assessment_results = {}
-if 'all_users' not in st.session_state:
-    st.session_state.all_users = {}
-if 'user_stats' not in st.session_state:
-    st.session_state.user_stats = {}
-
-def get_user_stats(user_id):
-    """Get or initialize user statistics"""
-    if user_id not in st.session_state.user_stats:
-        st.session_state.user_stats[user_id] = {
-            'overall_progress': 0,
-            'study_streak': 0,
-            'study_time_today': 0,
-            'achievements': 0,
-            'last_activity_date': None,
-            'total_study_time': 0,
-            'sessions_completed': 0,
-            'problems_solved': 0
-        }
-    return st.session_state.user_stats[user_id]
-
-def update_user_stats(user_id, activity_type, progress_amount=0, time_spent=0):
-    """Update user statistics based on activity"""
-    stats = get_user_stats(user_id)
-    today = datetime.now().date()
-    
-    # Update study time
-    stats['study_time_today'] += time_spent
-    stats['total_study_time'] += time_spent
-    
-    # Update progress
-    stats['overall_progress'] = min(100, stats['overall_progress'] + progress_amount)
-    
-    # Update streak
-    if stats['last_activity_date'] != today:
-        if stats['last_activity_date'] == today - timedelta(days=1):
-            stats['study_streak'] += 1
-        else:
-            stats['study_streak'] = 1
-        stats['last_activity_date'] = today
-    
-    # Activity-specific updates
-    if activity_type == 'lesson_completed':
-        stats['sessions_completed'] += 1
-        if stats['sessions_completed'] % 5 == 0:  # Achievement every 5 sessions
-            stats['achievements'] += 1
-    elif activity_type == 'problem_solved':
-        stats['problems_solved'] += 1
-        if stats['problems_solved'] % 10 == 0:  # Achievement every 10 problems
-            stats['achievements'] += 1
-    
-    return stats
-
-# Sample data for demonstration (demo users)
-DEMO_USERS = {
-    "demo_student": {
-        "name": "Demo Student",
-        "role": "Student",
-        "email": "student@demo.com",
-        "age": 16,
-        "grade": "10th Grade",
-        "learning_style": ["Visual"],
-        "subjects_interest": ["Mathematics", "Physics"],
-        "progress": {
-            "Mathematics": 85,
-            "Physics": 78,
-            "Chemistry": 65,
-            "Literature": 45,
-            "History": 40
-        }
-    },
-    "demo_tutor": {
-        "name": "Demo Tutor",
-        "role": "Tutor",
-        "email": "tutor@demo.com",
-        "specialization": ["Mathematics", "Physics", "Chemistry"],
-        "experience": "5+ years",
-        "students": ["Demo Student"]
-    },
-    "demo_parent": {
-        "name": "Demo Parent",
-        "role": "Parent",
-        "email": "parent@demo.com",
-        "num_children": 1,
-        "children": ["Demo Student"]
-    },
-    "demo_teacher": {
-        "name": "Demo Teacher",
-        "role": "Teacher",
-        "email": "teacher@demo.com",
-        "subjects": ["Mathematics", "Physics"],
-        "grade_levels": ["High School"],
-        "class_size": 28
-    }
-}
-
-# Initialize demo users in session state
-if not st.session_state.all_users:
-    st.session_state.all_users = DEMO_USERS.copy()
-
-SUBJECTS = ["Mathematics", "Physics", "Chemistry", "Literature", "History", "Biology", "Geography", "Economics"]
-LEARNING_STYLES = ["Visual", "Auditory", "Kinesthetic", "Reading/Writing"]
-LLM_MODELS = {
-    "GPT-4": "Primary tutoring, creative writing, complex problem-solving",
-    "Claude": "Content summarization, reading comprehension, academic discussions",
-    "Perplexity": "Research assistance, fact-checking, current events",
-    "Gemini": "Multimodal analysis, mathematical problem solving",
-    "Grok": "Conversational practice, engagement-focused interactions"
-}
-
-# Custom CSS
-st.markdown("""
-<style>
-    .main-header {
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .role-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #667eea;
-        margin: 1rem 0;
-    }
-    .progress-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1rem;
-        border-radius: 10px;
-        color: white;
-        margin: 0.5rem 0;
-    }
-    .metric-card {
-        background: white;
-        padding: 1rem;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        text-align: center;
-    }
-    .chat-message {
-        padding: 0.5rem;
-        margin: 0.5rem 0;
-        border-radius: 8px;
-    }
-    .user-message {
-        background: #e3f2fd;
-        margin-left: 2rem;
-    }
-    .ai-message {
-        background: #f3e5f5;
-        margin-right: 2rem;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-def login_page():
-    """Login and Registration page"""
-    st.markdown("""
-    <div class="main-header">
-        <h1>🎓 EduTech AI Learning Platform</h1>
-        <p>Personalized Learning Experiences Powered by AI</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        # Toggle between Sign In and Register
-        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
-        
-        with tab1:
-            st.subheader("Welcome Back!")
-            
-            with st.form("signin_form"):
-                email = st.text_input("Email Address", placeholder="Enter your email")
-                password = st.text_input("Password", type="password", placeholder="Enter your password")
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    signin_submitted = st.form_submit_button("Sign In", use_container_width=True)
-                with col_b:
-                    demo_mode = st.form_submit_button("Try Demo", use_container_width=True)
-                
-                if signin_submitted:
-                    if not email or not password:
-                        st.error("Please enter both email and password.")
-                    else:
-                        # Check if user exists
-                        user_found = None
-                        for user_id, user_data in st.session_state.all_users.items():
-                            if user_data.get("email") == email:
-                                user_found = user_id
-                                break
-                        
-                        if user_found:
-                            st.session_state.current_user = user_found
-                            st.success(f"Welcome back, {st.session_state.all_users[user_found]['name']}! 🎉")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error("Account not found. Please check your email or create a new account.")
-            
-            # Demo mode section (outside the form)
-            if st.session_state.get('show_demo_options', False) or demo_mode:
-                st.session_state.show_demo_options = True
-                
-                st.markdown("---")
-                st.subheader("Try Demo Account")
-                demo_options = {
-                    "Demo Student": "demo_student",
-                    "Demo Tutor": "demo_tutor", 
-                    "Demo Parent": "demo_parent",
-                    "Demo Teacher": "demo_teacher"
-                }
-                
-                selected_demo = st.selectbox("Choose demo role:", list(demo_options.keys()))
-                
-                if st.button("Enter Demo", use_container_width=True):
-                    st.session_state.current_user = demo_options[selected_demo]
-                    st.session_state.show_demo_options = False
-                    st.success(f"Entering demo as {selected_demo}...")
-                    time.sleep(1)
-                    st.rerun()
-        
-        with tab2:
-            st.subheader("Join EduTech Today!")
-            
-            with st.form("registration_form"):
-                name = st.text_input("Full Name *", placeholder="Enter your full name")
-                email = st.text_input("Email Address *", placeholder="Enter your email")
-                password = st.text_input("Password *", type="password", placeholder="Create a password")
-                confirm_password = st.text_input("Confirm Password *", type="password", placeholder="Confirm your password")
-                
-                st.markdown("---")
-                st.subheader("What's your role?")
-                
-                role = st.selectbox("I am a...", [
-                    "",
-                    "Student - I want to learn and improve my skills",
-                    "Tutor - I want to help students learn effectively", 
-                    "Parent - I want to monitor my child's progress",
-                    "Teacher - I want to manage my classroom",
-                    "Expert - I want to create educational content"
-                ])
-                
-                # Additional fields based on role selection
-                age, grade, learning_style, subjects_interest = None, None, [], []
-                specialization, experience = [], ""
-                num_children, children_ages = 1, ""
-                subjects_taught, grade_levels = [], []
-                expertise_areas, credentials = [], ""
-                
-                if "Student" in str(role):
-                    st.markdown("### Tell us about yourself")
-                    age = st.number_input("Age", min_value=5, max_value=25, value=16)
-                    grade = st.selectbox("Grade Level", 
-                                       ["", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th", "11th", "12th", "University"])
-                    learning_style = st.multiselect("How do you prefer to learn? (Select all that apply)", LEARNING_STYLES)
-                    subjects_interest = st.multiselect("What subjects interest you?", SUBJECTS)
-                    
-                elif "Tutor" in str(role):
-                    st.markdown("### Tutor Information")
-                    specialization = st.multiselect("Your specialization subjects", SUBJECTS)
-                    experience = st.selectbox("Years of tutoring experience", ["Less than 1 year", "1-3 years", "3-5 years", "5+ years"])
-                    
-                elif "Parent" in str(role):
-                    st.markdown("### Parent Information")
-                    num_children = st.number_input("Number of children", min_value=1, max_value=10, value=1)
-                    children_ages = st.text_input("Children's ages (separated by commas)", placeholder="e.g., 8, 12, 16")
-                    
-                elif "Teacher" in str(role):
-                    st.markdown("### Teacher Information")
-                    subjects_taught = st.multiselect("Subjects you teach", SUBJECTS)
-                    grade_levels = st.multiselect("Grade levels you teach", 
-                                                ["Elementary", "Middle School", "High School", "University"])
-                    
-                elif "Expert" in str(role):
-                    st.markdown("### Expert Information")
-                    expertise_areas = st.multiselect("Your areas of expertise", SUBJECTS)
-                    credentials = st.text_area("Brief description of your credentials", 
-                                             placeholder="PhD in Mathematics, 10 years industry experience...")
-                
-                # Terms and conditions
-                st.markdown("---")
-                agree_terms = st.checkbox("I agree to the Terms of Service and Privacy Policy")
-                
-                submitted = st.form_submit_button("Create Account", use_container_width=True)
-                
-                if submitted:
-                    # Validation
-                    if not name or not email or not password or not confirm_password or not role or not agree_terms:
-                        st.error("Please fill in all required fields and agree to the terms.")
-                    elif not role.strip():
-                        st.error("Please select your role.")
-                    elif password != confirm_password:
-                        st.error("Passwords do not match.")
-                    elif len(password) < 6:
-                        st.error("Password must be at least 6 characters long.")
-                    else:
-                        # Check if email already exists
-                        email_exists = any(user_data.get("email") == email for user_data in st.session_state.all_users.values())
-                        
-                        if email_exists:
-                            st.error("An account with this email already exists. Please sign in instead.")
-                        else:
-                            # Extract role from selection
-                            user_role = role.split(" - ")[0]
-                            
-                            # Create new user data
-                            new_user_id = f"user_{len(st.session_state.all_users) + 1}"
-                            user_data = {
-                                "name": name,
-                                "role": user_role,
-                                "email": email,
-                                "password": password  # In a real app, this would be hashed
-                            }
-                            
-                            # Add role-specific data
-                            if user_role == "Student":
-                                user_data.update({
-                                    "age": age,
-                                    "grade": grade,
-                                    "learning_style": learning_style,
-                                    "subjects_interest": subjects_interest,
-                                    "progress": {subject: random.randint(40, 90) for subject in subjects_interest[:5]} if subjects_interest else {}
-                                })
-                            elif user_role == "Tutor":
-                                user_data.update({
-                                    "specialization": specialization,
-                                    "experience": experience,
-                                    "students": []
-                                })
-                            elif user_role == "Parent":
-                                user_data.update({
-                                    "num_children": num_children,
-                                    "children_ages": children_ages,
-                                    "children": [f"Child {i+1}" for i in range(num_children)]
-                                })
-                            elif user_role == "Teacher":
-                                user_data.update({
-                                    "subjects": subjects_taught,
-                                    "grade_levels": grade_levels,
-                                    "class_size": random.randint(20, 35)
-                                })
-                            elif user_role == "Expert":
-                                user_data.update({
-                                    "expertise_areas": expertise_areas,
-                                    "credentials": credentials
-                                })
-                            
-                            # Store user data
-                            st.session_state.all_users[new_user_id] = user_data
-                            st.session_state.current_user = new_user_id
-                            
-                            st.success(f"Welcome to EduTech AI Learning Platform, {name}! 🎉")
-                            time.sleep(2)
-                            st.rerun()
-
-def intake_assessment():
-    """Adaptive intake assessment"""
-    st.header("📋 Personalized Learning Assessment")
-    
-    user_data = st.session_state.all_users[st.session_state.current_user]
-    
-    if user_data["role"] == "Student":
-        st.subheader("Let's understand your learning preferences!")
-        
-        with st.form("intake_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("Learning Style Assessment")
-                learning_pref = st.radio(
-                    "How do you prefer to learn new concepts?",
-                    ["Visual (charts, diagrams, mind maps)",
-                     "Auditory (listening, discussions)",
-                     "Kinesthetic (hands-on activities)",
-                     "Reading/Writing (text-based)"]
-                )
-                
-                study_time = st.slider("Available study hours per day", 1, 8, 3)
-                
-                goals = st.multiselect(
-                    "Select your academic goals:",
-                    ["Improve grades", "Test preparation", "College readiness", 
-                     "Skill development", "Career preparation"]
-                )
-            
-            with col2:
-                st.subheader("Subject Assessment")
-                subjects_interest = st.multiselect("Subjects you enjoy:", SUBJECTS)
-                subjects_struggle = st.multiselect("Subjects you find challenging:", SUBJECTS)
-                
-                motivation = st.select_slider(
-                    "How motivated are you to learn?",
-                    options=["Low", "Moderate", "High", "Very High"]
-                )
-                
-                tech_comfort = st.select_slider(
-                    "How comfortable are you with technology?",
-                    options=["Beginner", "Intermediate", "Advanced", "Expert"]
-                )
-            
-            submitted = st.form_submit_button("Complete Assessment", use_container_width=True)
-            
-            if submitted:
-                st.session_state.assessment_results = {
-                    "learning_preference": learning_pref,
-                    "study_time": study_time,
-                    "goals": goals,
-                    "interests": subjects_interest,
-                    "struggles": subjects_struggle,
-                    "motivation": motivation,
-                    "tech_comfort": tech_comfort
-                }
-                st.success("Assessment completed! Your personalized learning plan is being generated...")
-                time.sleep(2)
-                st.rerun()
-
-def student_dashboard():
-    """Student dashboard with personalized learning"""
-    user_data = st.session_state.all_users[st.session_state.current_user]
-    user_id = st.session_state.current_user
-    stats = get_user_stats(user_id)
-    
-    st.title(f"Welcome back, {user_data['name']}! 🎓")
-    
-    # Progress Overview with real stats
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>📊 Overall Progress</h3>
-            <h2>{stats['overall_progress']:.0f}%</h2>
-            <p>Keep going!</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>🔥 Study Streak</h3>
-            <h2>{stats['study_streak']} days</h2>
-            <p>{"Amazing!" if stats['study_streak'] > 7 else "Great start!"}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>⏱️ Study Time Today</h3>
-            <h2>{stats['study_time_today']:.1f} hrs</h2>
-            <p>{"On track" if stats['study_time_today'] >= 2 else "Keep going"}</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with col4:
-        st.markdown(f"""
-        <div class="metric-card">
-            <h3>🏆 Achievements</h3>
-            <h2>{stats['achievements']}</h2>
-            <p>Badges earned</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    # Subject Progress with interactive updates
-    st.subheader("📈 Subject Progress")
-    
-    # Use user's actual progress or create sample data
-    if user_data.get("progress"):
-        # Update progress based on recent activities
-        current_progress = user_data["progress"].copy()
-        
-        # Add some adaptive learning based on user stats
-        if stats['sessions_completed'] > 0:
-            for subject in current_progress:
-                # Gradually increase progress based on activity
-                boost = min(stats['sessions_completed'] * 2, 20)
-                current_progress[subject] = min(100, current_progress[subject] + boost)
-        
-        progress_data = pd.DataFrame([
-            {"Subject": subject, "Progress": progress}
-            for subject, progress in current_progress.items()
-        ])
-    else:
-        # Default progress for users without specific progress data
-        default_subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Chemistry", "Literature"])
-        progress_data = pd.DataFrame([
-            {"Subject": subject, "Progress": max(0, min(100, random.randint(20, 40) + stats['overall_progress']))}
-            for subject in default_subjects[:4]
-        ])
-    
-    if not progress_data.empty:
-        fig = px.bar(progress_data, x="Subject", y="Progress", 
-                     color="Progress", color_continuous_scale="viridis",
-                     title="Your Learning Progress by Subject")
-        fig.update_layout(showlegend=False)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    # Interactive Learning Path
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("🎯 Today's Learning Plan")
-        
-        # Generate learning tasks based on user's interests and adaptive difficulty
-        subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Literature", "History"])
-        learning_tasks = []
-        
-        # Adaptive difficulty based on progress
-        difficulty_level = "Beginner" if stats['overall_progress'] < 30 else "Intermediate" if stats['overall_progress'] < 70 else "Advanced"
-        
-        for i, subject in enumerate(subjects[:4]):
-            tasks = {
-                "Mathematics": f"{difficulty_level} Algebra Chapter 5",
-                "Physics": f"{difficulty_level} Newton's Laws Practice", 
-                "Chemistry": f"{difficulty_level} Chemical Bonding Exercises",
-                "Literature": f"{difficulty_level} Essay Writing Practice",
-                "History": f"{difficulty_level} World War II Timeline",
-                "Biology": f"{difficulty_level} Cell Structure Study",
-                "Geography": f"{difficulty_level} Climate Zones Review",
-                "Economics": f"{difficulty_level} Supply and Demand Analysis"
-            }
-            
-            task_name = tasks.get(subject, f"{difficulty_level} {subject} Practice Session")
-            estimated_time = random.randint(25, 50) * (1.5 if difficulty_level == "Advanced" else 1)
-            
-            learning_tasks.append({
-                "task": task_name,
-                "time": f"{estimated_time:.0f} min",
-                "type": subject,
-                "estimated_hours": estimated_time / 60
-            })
-        
-        for task in learning_tasks:
-            with st.expander(f"📚 {task['task']} ({task['time']})"):
-                st.write(f"**Subject:** {task['type']}")
-                st.write(f"**Difficulty:** {difficulty_level}")
-                st.write("**Learning Mode:** Interactive with AI tutor")
-                st.write("**Resources:** Video, Practice Problems, Mindmap")
-                
-                col_a, col_b = st.columns(2)
-                with col_a:
-                    if st.button(f"Start Learning", key=f"start_{task['task']}"):
-                        # Update stats when starting a lesson
-                        progress_gained = random.randint(3, 8)
-                        time_spent = task['estimated_hours']
-                        
-                        update_user_stats(user_id, 'lesson_completed', 
-                                        progress_amount=progress_gained, 
-                                        time_spent=time_spent)
-                        
-                        # Update subject progress
-                        if user_data.get("progress") and task['type'] in user_data["progress"]:
-                            user_data["progress"][task['type']] = min(100, 
-                                user_data["progress"][task['type']] + progress_gained)
-                        
-                        st.success(f"🎉 Great job! You gained {progress_gained} progress points and studied for {time_spent:.1f} hours!")
-                        st.balloons()
-                        time.sleep(1)
-                        st.rerun()
-                        
-                with col_b:
+with col_b:
                     if st.button(f"Get Help", key=f"help_{task['task']}"):
                         st.info("🤖 AI tutor is ready to help! Ask any questions about this topic.")
     
@@ -606,48 +11,51 @@ def student_dashboard():
         if st.button("Generate Practice Problem", use_container_width=True):
             problems = {
                 "Mathematics": [
-                    "Solve: 2x + 5 = 13",
-                    "Find the area of a circle with radius 7cm",
-                    "Simplify: (3x²)(4x³)",
-                    "What is 15% of 240?"
+                    {"question": "Solve: 2x + 5 = 13", "answer": "4", "type": "algebra"},
+                    {"question": "Find the area of a circle with radius 7cm (use π ≈ 3.14)", "answer": "153.86", "type": "geometry"},
+                    {"question": "Simplify: (3x²)(4x³)", "answer": "12x⁵", "type": "algebra"},
+                    {"question": "What is 15% of 240?", "answer": "36", "type": "percentage"}
                 ],
                 "Physics": [
-                    "A car accelerates at 2 m/s². What's its velocity after 5 seconds?",
-                    "Calculate the force needed to accelerate a 10kg object at 3 m/s²",
-                    "What's the kinetic energy of a 5kg object moving at 10 m/s?"
+                    {"question": "A car accelerates at 2 m/s². What's its velocity after 5 seconds from rest?", "answer": "10 m/s", "type": "motion"},
+                    {"question": "Calculate the force needed to accelerate a 10kg object at 3 m/s²", "answer": "30 N", "type": "forces"},
+                    {"question": "What's the kinetic energy of a 5kg object moving at 10 m/s?", "answer": "250 J", "type": "energy"}
                 ],
                 "Chemistry": [
-                    "Balance this equation: H₂ + O₂ → H₂O",
-                    "How many moles are in 36g of H₂O?",
-                    "What's the pH of a 0.1M HCl solution?"
+                    {"question": "Balance this equation: H₂ + O₂ → H₂O", "answer": "2H₂ + O₂ → 2H₂O", "type": "equations"},
+                    {"question": "How many moles are in 36g of H₂O? (H₂O = 18 g/mol)", "answer": "2 moles", "type": "moles"},
+                    {"question": "What's the pH of a 0.1M HCl solution?", "answer": "1", "type": "acids"}
                 ]
             }
             
-            # Select problem based on user interests
-            user_subjects = user_data.get("subjects_interest", ["Mathematics"])
-            selected_subject = random.choice(user_subjects)
+            # FIXED: Safe subject selection
+            user_subjects = safe_get_subjects(user_data, ["Mathematics", "Physics", "Chemistry"])
+            selected_subject = safe_random_choice(user_subjects)
             
             if selected_subject in problems:
                 problem = random.choice(problems[selected_subject])
-                st.info(f"**{selected_subject} Problem:** {problem}")
+                st.info(f"**{selected_subject} Problem:** {problem['question']}")
                 
                 user_answer = st.text_input("Your answer:", key=f"answer_{random.randint(1000,9999)}")
                 
                 if st.button("Submit Answer") and user_answer:
-                    # Simulate checking answer and update stats
-                    is_correct = random.choice([True, True, False])  # 66% chance correct
+                    # Check answer
+                    is_correct = user_answer.lower().strip() == problem['answer'].lower().strip()
                     
                     if is_correct:
                         progress_gained = random.randint(1, 3)
-                        update_user_stats(user_id, 'problem_solved', progress_amount=progress_gained)
+                        update_user_stats(user_id, 'problem_solved', progress_amount=progress_gained, subject=selected_subject)
                         st.success(f"✅ Correct! You earned {progress_gained} progress points!")
                         
                         # Update subject progress
                         if user_data.get("progress") and selected_subject in user_data["progress"]:
                             user_data["progress"][selected_subject] = min(100, 
                                 user_data["progress"][selected_subject] + progress_gained)
+                        
+                        st.balloons()
                     else:
-                        st.error("❌ Not quite right. Try again or ask for help!")
+                        st.error(f"❌ Not quite right. The correct answer is: {problem['answer']}")
+                        st.info("💡 Don't worry! Learning from mistakes is part of the process.")
                     
                     time.sleep(1)
                     st.rerun()
@@ -656,6 +64,7 @@ def student_dashboard():
         st.subheader("💬 Chat with AI Tutor")
         st.write("Ask me anything about your studies!")
         
+        # Display recent chat messages
         for message in st.session_state.chat_history[-3:]:  # Show last 3 messages
             if message["role"] == "user":
                 st.markdown(f'<div class="chat-message user-message">👤 {message["content"]}</div>', 
@@ -760,6 +169,213 @@ def student_dashboard():
                 del st.session_state.user_stats[user_id]
             st.success("Stats reset! Refresh to see changes.")
             st.rerun()
+
+def practice_page():
+    """Enhanced practice page"""
+    user_data = st.session_state.all_users[st.session_state.current_user]
+    user_id = st.session_state.current_user
+    stats = get_user_stats(user_id)
+    
+    st.title("🧮 Practice Center")
+    st.write("Strengthen your skills with interactive practice problems!")
+    
+    # Practice stats overview
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Problems Solved", stats['problems_solved'])
+    
+    with col2:
+        st.metric("Practice Sessions", stats['sessions_completed'])
+    
+    with col3:
+        accuracy = stats['accuracy_rate']
+        st.metric("Accuracy Rate", f"{accuracy:.1f}%", delta=f"+{min(5, stats['problems_solved'])}%")
+    
+    with col4:
+        difficulty_level = "Beginner" if stats['overall_progress'] < 30 else "Intermediate" if stats['overall_progress'] < 70 else "Advanced"
+        st.metric("Current Level", difficulty_level)
+    
+    # Subject selection with safe handling
+    st.subheader("📚 Choose Your Subject")
+    
+    subjects = safe_get_subjects(user_data, ["Mathematics", "Physics", "Chemistry", "Literature", "History"])
+    selected_subject = st.selectbox("Select a subject to practice:", subjects)
+    
+    # Difficulty selection based on progress
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if stats['overall_progress'] < 30:
+            available_difficulties = ["Beginner"]
+        elif stats['overall_progress'] < 70:
+            available_difficulties = ["Beginner", "Intermediate"]
+        else:
+            available_difficulties = ["Beginner", "Intermediate", "Advanced"]
+        
+        selected_difficulty = st.selectbox("Choose difficulty:", available_difficulties)
+    
+    with col2:
+        practice_type = st.selectbox("Practice type:", [
+            "Single Problem",
+            "Quick Quiz (5 questions)",
+            "Timed Challenge",
+            "Review Mode"
+        ])
+    
+    # Enhanced problem bank
+    problem_banks = {
+        "Mathematics": {
+            "Beginner": [
+                {"question": "What is 15 + 27?", "answer": "42", "type": "arithmetic", "points": 2},
+                {"question": "Solve for x: x + 5 = 12", "answer": "7", "type": "algebra", "points": 3},
+                {"question": "What is 8 × 9?", "answer": "72", "type": "arithmetic", "points": 2},
+                {"question": "What is 144 ÷ 12?", "answer": "12", "type": "arithmetic", "points": 2}
+            ],
+            "Intermediate": [
+                {"question": "Solve: 2x + 7 = 19", "answer": "6", "type": "algebra", "points": 4},
+                {"question": "Find the area of a circle with radius 5cm (use π ≈ 3.14)", "answer": "78.5", "type": "geometry", "points": 5},
+                {"question": "Simplify: (3x²)(4x³)", "answer": "12x⁵", "type": "algebra", "points": 4}
+            ],
+            "Advanced": [
+                {"question": "Find the derivative of f(x) = 3x² + 2x + 1", "answer": "6x + 2", "type": "calculus", "points": 6},
+                {"question": "Solve the quadratic equation: x² - 5x + 6 = 0", "answer": "x = 2, 3", "type": "algebra", "points": 6}
+            ]
+        },
+        "Physics": {
+            "Beginner": [
+                {"question": "What is the unit of force?", "answer": "Newton", "type": "concepts", "points": 2},
+                {"question": "If a car travels 60 km in 2 hours, what is its speed?", "answer": "30 km/h", "type": "motion", "points": 3}
+            ],
+            "Intermediate": [
+                {"question": "A car accelerates at 2 m/s². What's its velocity after 5 seconds from rest?", "answer": "10 m/s", "type": "motion", "points": 4},
+                {"question": "Calculate force: F = ma, where m = 10kg and a = 3 m/s²", "answer": "30 N", "type": "forces", "points": 4}
+            ],
+            "Advanced": [
+                {"question": "Calculate the electric field 2m from a 5μC charge (k = 9×10⁹)", "answer": "11,250 N/C", "type": "electricity", "points": 6}
+            ]
+        },
+        "Chemistry": {
+            "Beginner": [
+                {"question": "What is the chemical symbol for water?", "answer": "H2O", "type": "formulas", "points": 2},
+                {"question": "How many protons does carbon have?", "answer": "6", "type": "atoms", "points": 2}
+            ],
+            "Intermediate": [
+                {"question": "Balance: H₂ + O₂ → H₂O", "answer": "2H₂ + O₂ → 2H₂O", "type": "equations", "points": 4},
+                {"question": "How many moles are in 36g of H₂O? (H₂O = 18 g/mol)", "answer": "2 moles", "type": "moles", "points": 4}
+            ],
+            "Advanced": [
+                {"question": "What is the pH of 0.01 M HCl solution?", "answer": "2", "type": "acids", "points": 5}
+            ]
+        }
+    }
+    
+    # Generate practice session
+    if st.button("🎯 Start Practice Session", use_container_width=True, type="primary"):
+        if selected_subject in problem_banks and selected_difficulty in problem_banks[selected_subject]:
+            problems = problem_banks[selected_subject][selected_difficulty]
+            
+            if practice_type == "Quick Quiz (5 questions)":
+                # Generate a quiz
+                st.subheader(f"📝 {selected_subject} Quiz - {selected_difficulty} Level")
+                
+                if problems:
+                    quiz_problems = random.sample(problems, min(5, len(problems)))
+                    correct_answers = 0
+                    
+                    with st.form("quiz_form"):
+                        user_answers = []
+                        for i, problem in enumerate(quiz_problems):
+                            st.write(f"**Question {i+1}:** {problem['question']}")
+                            answer = st.text_input(f"Your answer:", key=f"q_{i}")
+                            user_answers.append(answer)
+                        
+                        submitted = st.form_submit_button("Submit Quiz")
+                        
+                        if submitted:
+                            for i, (problem, user_answer) in enumerate(zip(quiz_problems, user_answers)):
+                                if user_answer.lower().strip() == problem['answer'].lower().strip():
+                                    correct_answers += 1
+                                    st.success(f"✅ Question {i+1}: Correct!")
+                                else:
+                                    st.error(f"❌ Question {i+1}: Incorrect. Answer: {problem['answer']}")
+                            
+                            # Calculate score and update stats
+                            score = (correct_answers / len(quiz_problems)) * 100
+                            progress_gained = correct_answers * 2
+                            
+                            st.subheader(f"🎉 Quiz Complete!")
+                            st.write(f"**Score:** {correct_answers}/{len(quiz_problems)} ({score:.0f}%)")
+                            st.write(f"**Progress gained:** {progress_gained} points")
+                            
+                            # Update user stats
+                            update_user_stats(user_id, 'problem_solved', 
+                                            progress_amount=progress_gained, 
+                                            time_spent=0.25,
+                                            subject=selected_subject)
+                            
+                            # Update subject progress
+                            if user_data.get("progress") and selected_subject in user_data["progress"]:
+                                user_data["progress"][selected_subject] = min(100, 
+                                    user_data["progress"][selected_subject] + progress_gained)
+                            
+                            if score >= 80:
+                                st.balloons()
+                                st.success("🌟 Excellent work! You're mastering this topic!")
+                            elif score >= 60:
+                                st.success("👍 Good job! Keep practicing to improve!")
+                            else:
+                                st.info("📚 Keep studying! Practice makes perfect!")
+                            
+                            time.sleep(2)
+                            st.rerun()
+                else:
+                    st.warning("No problems available for this difficulty level.")
+            
+            else:
+                # Single problem practice
+                if problems:
+                    problem = random.choice(problems)
+                    
+                    st.subheader(f"🔍 {selected_subject} Practice - {selected_difficulty}")
+                    st.write(f"**Problem Type:** {problem['type'].title()}")
+                    
+                    st.info(f"**Question:** {problem['question']}")
+                    
+                    user_answer = st.text_input("Your answer:", key=f"practice_{random.randint(1000,9999)}")
+                    
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        if st.button("Check Answer") and user_answer:
+                            if user_answer.lower().strip() == problem['answer'].lower().strip():
+                                progress_gained = problem.get('points', 2)
+                                update_user_stats(user_id, 'problem_solved', 
+                                                progress_amount=progress_gained, 
+                                                time_spent=0.1,
+                                                subject=selected_subject)
+                                
+                                # Update subject progress
+                                if user_data.get("progress") and selected_subject in user_data["progress"]:
+                                    user_data["progress"][selected_subject] = min(100, 
+                                        user_data["progress"][selected_subject] + progress_gained)
+                                
+                                st.success(f"✅ Correct! You earned {progress_gained} progress points!")
+                                st.balloons()
+                            else:
+                                st.error(f"❌ Not quite right. The correct answer is: {problem['answer']}")
+                                st.info("💡 Don't worry! Learning from mistakes is part of the process.")
+                            
+                            time.sleep(1)
+                            st.rerun()
+                    
+                    with col2:
+                        if st.button("Skip & Get New Problem"):
+                            st.rerun()
+                else:
+                    st.warning("No problems available for this subject and difficulty level.")
+        else:
+            st.error("Problems not available for this subject and difficulty combination.")
 
 def tutor_dashboard():
     """Tutor dashboard for managing students and sessions"""
@@ -1272,268 +888,19 @@ def expert_dashboard():
                     if st.button("Join Meeting", key=f"meet_{collab['Project']}"):
                         st.success("Joining collaboration meeting...")
 
-def practice_page():
-    """Dedicated practice page with interactive exercises"""
-    user_data = st.session_state.all_users[st.session_state.current_user]
-    user_id = st.session_state.current_user
-    stats = get_user_stats(user_id)
-    
-    st.title("🧮 Practice Center")
-    st.write("Strengthen your skills with interactive practice problems!")
-    
-    # Practice stats overview
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric("Problems Solved", stats['problems_solved'], delta=None)
-    
-    with col2:
-        st.metric("Practice Sessions", stats['sessions_completed'], delta=None)
-    
-    with col3:
-        accuracy = min(100, 60 + stats['problems_solved'] * 2)  # Simulate improving accuracy
-        st.metric("Accuracy Rate", f"{accuracy}%", delta=f"+{min(5, stats['problems_solved'])}%")
-    
-    with col4:
-        difficulty_level = "Beginner" if stats['overall_progress'] < 30 else "Intermediate" if stats['overall_progress'] < 70 else "Advanced"
-        st.metric("Current Level", difficulty_level, delta=None)
-    
-    # Subject selection
-    st.subheader("📚 Choose Your Subject")
-    
-    subjects = user_data.get("subjects_interest", ["Mathematics", "Physics", "Chemistry", "Literature", "History"])
-    selected_subject = st.selectbox("Select a subject to practice:", subjects)
-    
-    # Difficulty selection based on progress
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if stats['overall_progress'] < 30:
-            available_difficulties = ["Beginner"]
-        elif stats['overall_progress'] < 70:
-            available_difficulties = ["Beginner", "Intermediate"]
-        else:
-            available_difficulties = ["Beginner", "Intermediate", "Advanced"]
-        
-        selected_difficulty = st.selectbox("Choose difficulty:", available_difficulties)
-    
-    with col2:
-        practice_type = st.selectbox("Practice type:", [
-            "Multiple Choice",
-            "Short Answer", 
-            "Problem Solving",
-            "Quick Quiz (5 questions)"
-        ])
-    
-    # Problem bank based on subject and difficulty
-    problem_banks = {
-        "Mathematics": {
-            "Beginner": [
-                {"question": "What is 15 + 27?", "answer": "42", "type": "arithmetic"},
-                {"question": "Solve for x: x + 5 = 12", "answer": "7", "type": "algebra"},
-                {"question": "What is 8 × 9?", "answer": "72", "type": "arithmetic"},
-                {"question": "What is 144 ÷ 12?", "answer": "12", "type": "arithmetic"}
-            ],
-            "Intermediate": [
-                {"question": "Solve: 2x + 7 = 19", "answer": "6", "type": "algebra"},
-                {"question": "Find the area of a circle with radius 5cm (use π ≈ 3.14)", "answer": "78.5", "type": "geometry"},
-                {"question": "Simplify: (3x²)(4x³)", "answer": "12x⁵", "type": "algebra"},
-                {"question": "What is 15% of 240?", "answer": "36", "type": "percentage"}
-            ],
-            "Advanced": [
-                {"question": "Find the derivative of f(x) = 3x² + 2x + 1", "answer": "6x + 2", "type": "calculus"},
-                {"question": "Solve the quadratic equation: x² - 5x + 6 = 0", "answer": "x = 2, 3", "type": "algebra"},
-                {"question": "Find the integral of 2x dx", "answer": "x² + C", "type": "calculus"}
-            ]
-        },
-        "Physics": {
-            "Beginner": [
-                {"question": "What is the unit of force?", "answer": "Newton", "type": "concepts"},
-                {"question": "If a car travels 60 km in 2 hours, what is its speed?", "answer": "30 km/h", "type": "motion"},
-                {"question": "What happens to the volume of gas when heated?", "answer": "increases", "type": "concepts"}
-            ],
-            "Intermediate": [
-                {"question": "A car accelerates at 2 m/s². What's its velocity after 5 seconds from rest?", "answer": "10 m/s", "type": "motion"},
-                {"question": "Calculate force: F = ma, where m = 10kg and a = 3 m/s²", "answer": "30 N", "type": "forces"},
-                {"question": "What's the kinetic energy of a 5kg object moving at 10 m/s? (KE = ½mv²)", "answer": "250 J", "type": "energy"}
-            ],
-            "Advanced": [
-                {"question": "Calculate the electric field 2m from a 5μC charge (k = 9×10⁹)", "answer": "11,250 N/C", "type": "electricity"},
-                {"question": "Find the frequency of light with wavelength 500nm (c = 3×10⁸ m/s)", "answer": "6×10¹⁴ Hz", "type": "waves"}
-            ]
-        },
-        "Chemistry": {
-            "Beginner": [
-                {"question": "What is the chemical symbol for water?", "answer": "H2O", "type": "formulas"},
-                {"question": "How many protons does carbon have?", "answer": "6", "type": "atoms"},
-                {"question": "What is the pH of pure water?", "answer": "7", "type": "acids"}
-            ],
-            "Intermediate": [
-                {"question": "Balance: H₂ + O₂ → H₂O", "answer": "2H₂ + O₂ → 2H₂O", "type": "equations"},
-                {"question": "How many moles are in 36g of H₂O? (H₂O = 18 g/mol)", "answer": "2 moles", "type": "moles"},
-                {"question": "What's the molarity of 2 moles of NaCl in 1L solution?", "answer": "2 M", "type": "solutions"}
-            ],
-            "Advanced": [
-                {"question": "Calculate ΔG for a reaction with ΔH = -100 kJ/mol, T = 298K, ΔS = -50 J/mol·K", "answer": "-85.1 kJ/mol", "type": "thermodynamics"},
-                {"question": "What is the pH of 0.01 M HCl solution?", "answer": "2", "type": "acids"}
-            ]
-        }
-    }
-    
-    # Generate practice session
-    if st.button("🎯 Start Practice Session", use_container_width=True, type="primary"):
-        if selected_subject in problem_banks and selected_difficulty in problem_banks[selected_subject]:
-            problems = problem_banks[selected_subject][selected_difficulty]
-            
-            if practice_type == "Quick Quiz (5 questions)":
-                # Generate a quiz
-                st.subheader(f"📝 {selected_subject} Quiz - {selected_difficulty} Level")
-                
-                quiz_problems = random.sample(problems, min(5, len(problems)))
-                correct_answers = 0
-                
-                with st.form("quiz_form"):
-                    user_answers = []
-                    for i, problem in enumerate(quiz_problems):
-                        st.write(f"**Question {i+1}:** {problem['question']}")
-                        answer = st.text_input(f"Your answer:", key=f"q_{i}")
-                        user_answers.append(answer)
-                    
-                    submitted = st.form_submit_button("Submit Quiz")
-                    
-                    if submitted:
-                        for i, (problem, user_answer) in enumerate(zip(quiz_problems, user_answers)):
-                            if user_answer.lower().strip() == problem['answer'].lower().strip():
-                                correct_answers += 1
-                                st.success(f"✅ Question {i+1}: Correct!")
-                            else:
-                                st.error(f"❌ Question {i+1}: Incorrect. Answer: {problem['answer']}")
-                        
-                        # Calculate score and update stats
-                        score = (correct_answers / len(quiz_problems)) * 100
-                        progress_gained = correct_answers * 2
-                        
-                        st.subheader(f"🎉 Quiz Complete!")
-                        st.write(f"**Score:** {correct_answers}/{len(quiz_problems)} ({score:.0f}%)")
-                        st.write(f"**Progress gained:** {progress_gained} points")
-                        
-                        # Update user stats
-                        update_user_stats(user_id, 'problem_solved', 
-                                        progress_amount=progress_gained, 
-                                        time_spent=0.25)  # 15 minutes for quiz
-                        
-                        # Update subject progress
-                        if user_data.get("progress") and selected_subject in user_data["progress"]:
-                            user_data["progress"][selected_subject] = min(100, 
-                                user_data["progress"][selected_subject] + progress_gained)
-                        
-                        if score >= 80:
-                            st.balloons()
-                            st.success("🌟 Excellent work! You're mastering this topic!")
-                        elif score >= 60:
-                            st.success("👍 Good job! Keep practicing to improve!")
-                        else:
-                            st.info("📚 Keep studying! Practice makes perfect!")
-                        
-                        time.sleep(2)
-                        st.rerun()
-            
-            else:
-                # Single problem practice
-                problem = random.choice(problems)
-                
-                st.subheader(f"🔍 {selected_subject} Practice - {selected_difficulty}")
-                st.write(f"**Problem Type:** {problem['type'].title()}")
-                
-                st.info(f"**Question:** {problem['question']}")
-                
-                user_answer = st.text_input("Your answer:", key=f"practice_{random.randint(1000,9999)}")
-                
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    if st.button("Check Answer") and user_answer:
-                        if user_answer.lower().strip() == problem['answer'].lower().strip():
-                            progress_gained = random.randint(2, 4)
-                            update_user_stats(user_id, 'problem_solved', progress_amount=progress_gained, time_spent=0.1)
-                            
-                            # Update subject progress
-                            if user_data.get("progress") and selected_subject in user_data["progress"]:
-                                user_data["progress"][selected_subject] = min(100, 
-                                    user_data["progress"][selected_subject] + progress_gained)
-                            
-                            st.success(f"✅ Correct! You earned {progress_gained} progress points!")
-                            st.balloons()
-                        else:
-                            st.error(f"❌ Not quite right. The correct answer is: {problem['answer']}")
-                            st.info("💡 Don't worry! Learning from mistakes is part of the process.")
-                        
-                        time.sleep(1)
-                        st.rerun()
-                
-                with col2:
-                    if st.button("Skip & Get New Problem"):
-                        st.rerun()
-    
-    # Practice recommendations
-    st.subheader("📋 Recommended Practice")
-    
-    # Show weak subjects for focused practice
-    if user_data.get("progress"):
-        weak_subjects = [(subject, progress) for subject, progress in user_data["progress"].items() if progress < 60]
-        
-        if weak_subjects:
-            st.write("**Subjects that need more practice:**")
-            
-            for subject, progress in weak_subjects:
-                col1, col2 = st.columns([3, 1])
-                
-                with col1:
-                    st.write(f"📚 **{subject}** - Current: {progress}%")
-                    st.progress(progress / 100)
-                
-                with col2:
-                    if st.button(f"Practice {subject}", key=f"practice_rec_{subject}"):
-                        # Auto-select this subject and generate a problem
-                        st.session_state.selected_subject = subject
-                        st.rerun()
-    
-    # Daily practice streak
-    st.subheader("🔥 Practice Streak")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.metric("Daily Practice Streak", f"{stats['study_streak']} days")
-        st.write("Practice daily to maintain your streak!")
-    
-    with col2:
-        st.metric("Problems Solved Today", stats['problems_solved'] % 20)  # Reset daily simulation
-        st.write("Goal: 10 problems per day")
-        
-        progress_today = min(100, (stats['problems_solved'] % 20) * 10)
-        st.progress(progress_today / 100)
-    
-    # Achievement showcase
-    if stats['achievements'] > 0:
-        st.subheader("🏆 Recent Achievements")
-        
-        achievements = [
-            "🎯 Problem Solver: Solved 10 problems",
-            "📚 Dedicated Learner: 5 study sessions",
-            "🔥 Streak Master: 7-day study streak",
-            "🌟 Quiz Master: 90% quiz average",
-            "🚀 Progress Champion: 50% overall progress"
-        ]
-        
-        earned_achievements = achievements[:stats['achievements']]
-        
-        for achievement in earned_achievements:
-            st.success(achievement)
+def llm_integration_demo():
     """Demonstration of LLM integration for different learning scenarios"""
     st.title("🤖 AI Learning Models Integration")
     
     st.write("Experience how different AI models enhance your learning:")
+    
+    LLM_MODELS = {
+        "GPT-4": "Primary tutoring, creative writing, complex problem-solving",
+        "Claude": "Content summarization, reading comprehension, academic discussions",
+        "Perplexity": "Research assistance, fact-checking, current events",
+        "Gemini": "Multimodal analysis, mathematical problem solving",
+        "Grok": "Conversational practice, engagement-focused interactions"
+    }
     
     col1, col2 = st.columns(2)
     
@@ -1582,9 +949,14 @@ def practice_page():
             st.success(f"**Recommended AI Model:** {recommended_model[learning_scenario]}")
             st.write(f"**AI Response:** {responses[learning_scenario]}")
 
-# Main application logic
 def main():
     """Main application function"""
+    # Initialize session state
+    initialize_session_state()
+    
+    # Initialize demo users if not present
+    if not st.session_state.all_users:
+        st.session_state.all_users = DEMO_USERS.copy()
     
     # Check if user is logged in
     if st.session_state.current_user is None:
@@ -1617,9 +989,10 @@ def main():
         
         if user_data['role'] == 'Student':
             st.metric("Overall Progress", f"{user_stats['overall_progress']:.0f}%", 
-                     delta=f"+{min(5, user_stats['sessions_completed'])}%" if user_stats['sessions_completed'] > 0 else None)
+                     delta=f"Level {user_stats['level']}")
             st.metric("Study Streak", f"{user_stats['study_streak']} days", 
                      delta="🔥" if user_stats['study_streak'] > 0 else None)
+            st.metric("Problems Solved", user_stats['problems_solved'])
         elif user_data['role'] == 'Tutor':
             st.metric("Active Students", "15", "👥")
             st.metric("Sessions Today", "8", "📅")
@@ -1638,35 +1011,808 @@ def main():
             st.rerun()
     
     # Main content area
-    if user_data['role'] == 'Student':
-        if page == "Assessment":
-            intake_assessment()
-        elif page == "Dashboard":
-            student_dashboard()
-        elif page == "Practice":
-            practice_page()
-        elif page == "AI Models Demo":
-            llm_integration_demo()
-    elif user_data['role'] == 'Tutor':
-        if page == "Dashboard":
-            tutor_dashboard()
-        elif page == "AI Models Demo":
-            llm_integration_demo()
-    elif user_data['role'] == 'Parent':
-        if page == "Dashboard":
-            parent_dashboard()
-        elif page == "AI Models Demo":
-            llm_integration_demo()
-    elif user_data['role'] == 'Teacher':
-        if page == "Dashboard":
-            teacher_dashboard()
-        elif page == "AI Models Demo":
-            llm_integration_demo()
-    elif user_data['role'] == 'Expert':
-        if page == "Dashboard":
-            expert_dashboard()
-        elif page == "AI Models Demo":
-            llm_integration_demo()
+    try:
+        if user_data['role'] == 'Student':
+            if page == "Assessment":
+                intake_assessment()
+            elif page == "Dashboard":
+                student_dashboard()
+            elif page == "Practice":
+                practice_page()
+            elif page == "AI Models Demo":
+                llm_integration_demo()
+        elif user_data['role'] == 'Tutor':
+            if page == "Dashboard":
+                tutor_dashboard()
+            elif page == "AI Models Demo":
+                llm_integration_demo()
+        elif user_data['role'] == 'Parent':
+            if page == "Dashboard":
+                parent_dashboard()
+            elif page == "AI Models Demo":
+                llm_integration_demo()
+        elif user_data['role'] == 'Teacher':
+            if page == "Dashboard":
+                teacher_dashboard()
+            elif page == "AI Models Demo":
+                llm_integration_demo()
+        elif user_data['role'] == 'Expert':
+            if page == "Dashboard":
+                expert_dashboard()
+            elif page == "AI Models Demo":
+                llm_integration_demo()
+    except Exception as e:
+        logger.error(f"Error in main content rendering: {e}")
+        st.error(f"An error occurred while loading the page. Please try refreshing.")
+        st.write("If the problem persists, please contact support.")
 
 if __name__ == "__main__":
-    main()
+    main()import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import json
+import random
+from typing import Dict, List, Any
+import time
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Page configuration
+st.set_page_config(
+    page_title="EduTech AI Learning Platform",
+    page_icon="🎓",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Initialize session state
+def initialize_session_state():
+    """Initialize all required session state variables"""
+    required_states = {
+        'user_data': {},
+        'current_user': None,
+        'chat_history': [],
+        'learning_progress': {},
+        'assessment_results': {},
+        'all_users': {},
+        'user_stats': {},
+        'notifications': [],
+        'theme': 'light',
+        'last_activity': datetime.now(),
+        'show_demo_options': False
+    }
+    
+    for key, default_value in required_states.items():
+        if key not in st.session_state:
+            st.session_state[key] = default_value
+
+# Constants
+SUBJECTS = ["Mathematics", "Physics", "Chemistry", "Literature", "History", "Biology", "Geography", "Economics"]
+LEARNING_STYLES = ["Visual", "Auditory", "Kinesthetic", "Reading/Writing"]
+
+# Enhanced user stats management
+def get_user_stats(user_id):
+    """Get or initialize user statistics"""
+    if user_id not in st.session_state.user_stats:
+        st.session_state.user_stats[user_id] = {
+            'overall_progress': 0,
+            'study_streak': 0,
+            'study_time_today': 0,
+            'achievements': 0,
+            'last_activity_date': None,
+            'total_study_time': 0,
+            'sessions_completed': 0,
+            'problems_solved': 0,
+            'accuracy_rate': 60,  # Start with base accuracy
+            'level': 1,
+            'experience_points': 0,
+            'favorite_subjects': [],
+            'weak_areas': [],
+            'badges': [],
+            'daily_goals': {
+                'study_time': 2.0,
+                'problems_solved': 10,
+                'sessions_completed': 2
+            }
+        }
+    return st.session_state.user_stats[user_id]
+
+def update_user_stats(user_id, activity_type, progress_amount=0, time_spent=0, subject=None):
+    """Update user statistics based on activity"""
+    try:
+        stats = get_user_stats(user_id)
+        today = datetime.now().date()
+        
+        # Update activity timestamp
+        st.session_state.last_activity = datetime.now()
+        
+        # Update study time
+        stats['study_time_today'] += time_spent
+        stats['total_study_time'] += time_spent
+        
+        # Update progress
+        stats['overall_progress'] = min(100, stats['overall_progress'] + progress_amount)
+        
+        # Update experience points
+        stats['experience_points'] += int(progress_amount * 10)
+        
+        # Update level (every 100 XP = 1 level)
+        new_level = (stats['experience_points'] // 100) + 1
+        if new_level > stats['level']:
+            stats['level'] = new_level
+            award_achievement(user_id, 'level_up')
+        
+        # Update streak
+        if stats['last_activity_date'] != today:
+            if stats['last_activity_date'] == today - timedelta(days=1):
+                stats['study_streak'] += 1
+            else:
+                stats['study_streak'] = 1
+            stats['last_activity_date'] = today
+        
+        # Activity-specific updates
+        if activity_type == 'lesson_completed':
+            stats['sessions_completed'] += 1
+            if stats['sessions_completed'] % 5 == 0:
+                award_achievement(user_id, 'session_milestone')
+                
+        elif activity_type == 'problem_solved':
+            stats['problems_solved'] += 1
+            # Update accuracy rate gradually
+            stats['accuracy_rate'] = min(100, stats['accuracy_rate'] + 0.5)
+            if stats['problems_solved'] % 10 == 0:
+                award_achievement(user_id, 'problem_solver')
+        
+        # Check for streak achievements
+        if stats['study_streak'] >= 7 and stats['study_streak'] % 7 == 0:
+            award_achievement(user_id, 'streak_master')
+        
+        # Update subject-specific tracking
+        if subject:
+            if subject not in stats['favorite_subjects'] and len(stats['favorite_subjects']) < 3:
+                stats['favorite_subjects'].append(subject)
+        
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error updating user stats: {e}")
+        return get_user_stats(user_id)
+
+def award_achievement(user_id, achievement_type):
+    """Award an achievement to a user"""
+    try:
+        stats = get_user_stats(user_id)
+        
+        achievement_definitions = {
+            'level_up': {
+                'name': 'Level Up! 🆙',
+                'description': 'Reached a new level',
+                'points': 50,
+                'icon': '🆙'
+            },
+            'session_milestone': {
+                'name': 'Session Master 📚',
+                'description': 'Completed 5 study sessions',
+                'points': 25,
+                'icon': '📚'
+            },
+            'problem_solver': {
+                'name': 'Problem Solver 🧮',
+                'description': 'Solved 10 practice problems',
+                'points': 30,
+                'icon': '🧮'
+            },
+            'streak_master': {
+                'name': 'Streak Master 🔥',
+                'description': 'Maintained a 7-day study streak',
+                'points': 100,
+                'icon': '🔥'
+            }
+        }
+        
+        if achievement_type in achievement_definitions and achievement_type not in stats['badges']:
+            achievement = achievement_definitions[achievement_type]
+            stats['badges'].append(achievement_type)
+            stats['achievements'] += 1
+            stats['experience_points'] += achievement['points']
+            
+            # Show achievement notification
+            st.success(f"🏆 Achievement Unlocked: {achievement['name']}")
+            
+    except Exception as e:
+        logger.error(f"Error awarding achievement: {e}")
+
+# Demo users data
+DEMO_USERS = {
+    "demo_student": {
+        "name": "Demo Student",
+        "role": "Student",
+        "email": "student@demo.com",
+        "age": 16,
+        "grade": "10th Grade",
+        "learning_style": ["Visual"],
+        "subjects_interest": ["Mathematics", "Physics"],
+        "progress": {
+            "Mathematics": 85,
+            "Physics": 78,
+            "Chemistry": 65,
+            "Literature": 45,
+            "History": 40
+        }
+    },
+    "demo_tutor": {
+        "name": "Demo Tutor",
+        "role": "Tutor",
+        "email": "tutor@demo.com",
+        "specialization": ["Mathematics", "Physics", "Chemistry"],
+        "experience": "5+ years",
+        "students": ["Demo Student"]
+    },
+    "demo_parent": {
+        "name": "Demo Parent",
+        "role": "Parent",
+        "email": "parent@demo.com",
+        "num_children": 1,
+        "children": ["Demo Student"]
+    },
+    "demo_teacher": {
+        "name": "Demo Teacher",
+        "role": "Teacher",
+        "email": "teacher@demo.com",
+        "subjects": ["Mathematics", "Physics"],
+        "grade_levels": ["High School"],
+        "class_size": 28
+    }
+}
+
+# Custom CSS
+st.markdown("""
+<style>
+    .main-header {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .role-card {
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+        margin: 1rem 0;
+    }
+    .metric-card {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+    }
+    .chat-message {
+        padding: 0.5rem;
+        margin: 0.5rem 0;
+        border-radius: 8px;
+    }
+    .user-message {
+        background: #e3f2fd;
+        margin-left: 2rem;
+    }
+    .ai-message {
+        background: #f3e5f5;
+        margin-right: 2rem;
+    }
+    .achievement-badge {
+        background: linear-gradient(45deg, #ffd700, #ffed4e);
+        color: #333;
+        padding: 0.5rem 1rem;
+        border-radius: 20px;
+        display: inline-block;
+        margin: 0.25rem;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+def safe_get_subjects(user_data, default_subjects=None):
+    """Safely get user subjects with fallback"""
+    if default_subjects is None:
+        default_subjects = ["Mathematics", "Physics", "Chemistry", "Literature"]
+    
+    subjects = user_data.get("subjects_interest", [])
+    if not subjects:
+        subjects = default_subjects
+    
+    return subjects
+
+def safe_random_choice(items, default_items=None):
+    """Safely choose random item with fallback"""
+    if not items:
+        items = default_items or ["Mathematics", "Physics", "Chemistry"]
+    
+    if items:
+        return random.choice(items)
+    else:
+        return "Mathematics"
+
+def login_page():
+    """Login and Registration page"""
+    st.markdown("""
+    <div class="main-header">
+        <h1>🎓 EduTech AI Learning Platform</h1>
+        <p>Personalized Learning Experiences Powered by AI</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        tab1, tab2 = st.tabs(["Sign In", "Create Account"])
+        
+        with tab1:
+            render_signin_tab()
+        
+        with tab2:
+            render_registration_tab()
+
+def render_signin_tab():
+    """Render the sign-in tab"""
+    st.subheader("Welcome Back!")
+    
+    with st.form("signin_form"):
+        email = st.text_input("Email Address", placeholder="Enter your email")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            signin_submitted = st.form_submit_button("Sign In", use_container_width=True)
+        with col_b:
+            demo_mode = st.form_submit_button("Try Demo", use_container_width=True)
+        
+        if signin_submitted:
+            handle_signin(email, password)
+    
+    # Demo mode section
+    if st.session_state.get('show_demo_options', False) or demo_mode:
+        render_demo_options()
+
+def handle_signin(email, password):
+    """Handle user sign-in"""
+    if not email or not password:
+        st.error("Please enter both email and password.")
+        return
+    
+    # Check if user exists
+    user_found = None
+    for user_id, user_data in st.session_state.all_users.items():
+        if user_data.get("email") == email:
+            user_found = user_id
+            break
+    
+    if user_found:
+        st.session_state.current_user = user_found
+        st.success(f"Welcome back, {st.session_state.all_users[user_found]['name']}! 🎉")
+        time.sleep(1)
+        st.rerun()
+    else:
+        st.error("Account not found. Please check your email or create a new account.")
+
+def render_demo_options():
+    """Render demo account options"""
+    st.session_state.show_demo_options = True
+    
+    st.markdown("---")
+    st.subheader("Try Demo Account")
+    demo_options = {
+        "Demo Student": "demo_student",
+        "Demo Tutor": "demo_tutor", 
+        "Demo Parent": "demo_parent",
+        "Demo Teacher": "demo_teacher"
+    }
+    
+    selected_demo = st.selectbox("Choose demo role:", list(demo_options.keys()))
+    
+    if st.button("Enter Demo", use_container_width=True):
+        st.session_state.current_user = demo_options[selected_demo]
+        st.session_state.show_demo_options = False
+        st.success(f"Entering demo as {selected_demo}...")
+        time.sleep(1)
+        st.rerun()
+
+def render_registration_tab():
+    """Render the registration tab"""
+    st.subheader("Join EduTech Today!")
+    
+    with st.form("registration_form"):
+        name = st.text_input("Full Name *", placeholder="Enter your full name")
+        email = st.text_input("Email Address *", placeholder="Enter your email")
+        password = st.text_input("Password *", type="password", placeholder="Create a password")
+        confirm_password = st.text_input("Confirm Password *", type="password", placeholder="Confirm your password")
+        
+        st.markdown("---")
+        st.subheader("What's your role?")
+        
+        role = st.selectbox("I am a...", [
+            "",
+            "Student - I want to learn and improve my skills",
+            "Tutor - I want to help students learn effectively", 
+            "Parent - I want to monitor my child's progress",
+            "Teacher - I want to manage my classroom",
+            "Expert - I want to create educational content"
+        ])
+        
+        # Role-specific fields
+        role_data = render_role_specific_fields(role)
+        
+        # Terms and conditions
+        st.markdown("---")
+        agree_terms = st.checkbox("I agree to the Terms of Service and Privacy Policy")
+        
+        submitted = st.form_submit_button("Create Account", use_container_width=True)
+        
+        if submitted:
+            handle_registration(name, email, password, confirm_password, role, role_data, agree_terms)
+
+def render_role_specific_fields(role):
+    """Render role-specific registration fields"""
+    role_data = {}
+    
+    if "Student" in str(role):
+        st.markdown("### Tell us about yourself")
+        role_data['age'] = st.number_input("Age", min_value=5, max_value=25, value=16)
+        role_data['grade'] = st.selectbox("Grade Level", 
+                               ["", "K", "1st", "2nd", "3rd", "4th", "5th", "6th", 
+                                "7th", "8th", "9th", "10th", "11th", "12th", "University"])
+        role_data['learning_style'] = st.multiselect("How do you prefer to learn?", LEARNING_STYLES)
+        role_data['subjects_interest'] = st.multiselect("What subjects interest you?", SUBJECTS)
+        
+    elif "Tutor" in str(role):
+        st.markdown("### Tutor Information")
+        role_data['specialization'] = st.multiselect("Your specialization subjects", SUBJECTS)
+        role_data['experience'] = st.selectbox("Years of tutoring experience", 
+                                    ["Less than 1 year", "1-3 years", "3-5 years", "5+ years"])
+        
+    elif "Parent" in str(role):
+        st.markdown("### Parent Information")
+        role_data['num_children'] = st.number_input("Number of children", min_value=1, max_value=10, value=1)
+        role_data['children_ages'] = st.text_input("Children's ages (separated by commas)", 
+                                       placeholder="e.g., 8, 12, 16")
+        
+    elif "Teacher" in str(role):
+        st.markdown("### Teacher Information")
+        role_data['subjects_taught'] = st.multiselect("Subjects you teach", SUBJECTS)
+        role_data['grade_levels'] = st.multiselect("Grade levels you teach", 
+                                      ["Elementary", "Middle School", "High School", "University"])
+        
+    elif "Expert" in str(role):
+        st.markdown("### Expert Information")
+        role_data['expertise_areas'] = st.multiselect("Your areas of expertise", SUBJECTS)
+        role_data['credentials'] = st.text_area("Brief description of your credentials", 
+                                   placeholder="PhD in Mathematics, 10 years industry experience...")
+    
+    return role_data
+
+def handle_registration(name, email, password, confirm_password, role, role_data, agree_terms):
+    """Handle user registration"""
+    # Validation
+    if not all([name, email, password, confirm_password, role, agree_terms]):
+        st.error("Please fill in all required fields and agree to the terms.")
+        return
+    
+    if not role.strip():
+        st.error("Please select your role.")
+        return
+    
+    if password != confirm_password:
+        st.error("Passwords do not match.")
+        return
+    
+    if len(password) < 6:
+        st.error("Password must be at least 6 characters long.")
+        return
+    
+    # Check if email already exists
+    email_exists = any(user_data.get("email") == email for user_data in st.session_state.all_users.values())
+    
+    if email_exists:
+        st.error("An account with this email already exists. Please sign in instead.")
+        return
+    
+    # Create new user
+    create_new_user(name, email, password, role, role_data)
+
+def create_new_user(name, email, password, role, role_data):
+    """Create a new user account"""
+    try:
+        # Extract role from selection
+        user_role = role.split(" - ")[0]
+        
+        # Create new user data
+        new_user_id = f"user_{len(st.session_state.all_users) + 1}"
+        user_data = {
+            "name": name,
+            "role": user_role,
+            "email": email,
+            "password": password  # In production, this would be hashed
+        }
+        
+        # Add role-specific data
+        if user_role == "Student":
+            user_data.update({
+                "age": role_data.get('age'),
+                "grade": role_data.get('grade'),
+                "learning_style": role_data.get('learning_style', []),
+                "subjects_interest": role_data.get('subjects_interest', []),
+                "progress": {subject: random.randint(40, 90) 
+                           for subject in role_data.get('subjects_interest', [])[:5]}
+            })
+        elif user_role == "Tutor":
+            user_data.update({
+                "specialization": role_data.get('specialization', []),
+                "experience": role_data.get('experience'),
+                "students": []
+            })
+        elif user_role == "Parent":
+            user_data.update({
+                "num_children": role_data.get('num_children', 1),
+                "children_ages": role_data.get('children_ages', ''),
+                "children": [f"Child {i+1}" for i in range(role_data.get('num_children', 1))]
+            })
+        elif user_role == "Teacher":
+            user_data.update({
+                "subjects": role_data.get('subjects_taught', []),
+                "grade_levels": role_data.get('grade_levels', []),
+                "class_size": random.randint(20, 35)
+            })
+        elif user_role == "Expert":
+            user_data.update({
+                "expertise_areas": role_data.get('expertise_areas', []),
+                "credentials": role_data.get('credentials', '')
+            })
+        
+        # Store user data
+        st.session_state.all_users[new_user_id] = user_data
+        st.session_state.current_user = new_user_id
+        
+        st.success(f"Welcome to EduTech AI Learning Platform, {name}! 🎉")
+        time.sleep(2)
+        st.rerun()
+        
+    except Exception as e:
+        logger.error(f"Error creating new user: {e}")
+        st.error("Failed to create account. Please try again.")
+
+def intake_assessment():
+    """Adaptive intake assessment"""
+    st.header("📋 Personalized Learning Assessment")
+    
+    user_data = st.session_state.all_users[st.session_state.current_user]
+    
+    if user_data["role"] == "Student":
+        st.subheader("Let's understand your learning preferences!")
+        
+        with st.form("intake_form"):
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("Learning Style Assessment")
+                learning_pref = st.radio(
+                    "How do you prefer to learn new concepts?",
+                    ["Visual (charts, diagrams, mind maps)",
+                     "Auditory (listening, discussions)",
+                     "Kinesthetic (hands-on activities)",
+                     "Reading/Writing (text-based)"]
+                )
+                
+                study_time = st.slider("Available study hours per day", 1, 8, 3)
+                
+                goals = st.multiselect(
+                    "Select your academic goals:",
+                    ["Improve grades", "Test preparation", "College readiness", 
+                     "Skill development", "Career preparation"]
+                )
+            
+            with col2:
+                st.subheader("Subject Assessment")
+                subjects_interest = st.multiselect("Subjects you enjoy:", SUBJECTS)
+                subjects_struggle = st.multiselect("Subjects you find challenging:", SUBJECTS)
+                
+                motivation = st.select_slider(
+                    "How motivated are you to learn?",
+                    options=["Low", "Moderate", "High", "Very High"]
+                )
+                
+                tech_comfort = st.select_slider(
+                    "How comfortable are you with technology?",
+                    options=["Beginner", "Intermediate", "Advanced", "Expert"]
+                )
+            
+            submitted = st.form_submit_button("Complete Assessment", use_container_width=True)
+            
+            if submitted:
+                st.session_state.assessment_results = {
+                    "learning_preference": learning_pref,
+                    "study_time": study_time,
+                    "goals": goals,
+                    "interests": subjects_interest,
+                    "struggles": subjects_struggle,
+                    "motivation": motivation,
+                    "tech_comfort": tech_comfort
+                }
+                
+                # Update user data with assessment results
+                user_data.update({
+                    "subjects_interest": subjects_interest,
+                    "subjects_struggle": subjects_struggle,
+                    "daily_study_time": study_time
+                })
+                
+                # Award assessment completion achievement
+                update_user_stats(st.session_state.current_user, 'assessment_completed', progress_amount=5)
+                
+                st.success("Assessment completed! Your personalized learning plan is being generated...")
+                time.sleep(2)
+                st.rerun()
+
+def student_dashboard():
+    """Student dashboard with personalized learning"""
+    user_data = st.session_state.all_users[st.session_state.current_user]
+    user_id = st.session_state.current_user
+    stats = get_user_stats(user_id)
+    
+    st.title(f"Welcome back, {user_data['name']}! 🎓")
+    
+    # Progress Overview with real stats
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>📊 Overall Progress</h3>
+            <h2>{stats['overall_progress']:.0f}%</h2>
+            <p>Level {stats['level']}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>🔥 Study Streak</h3>
+            <h2>{stats['study_streak']} days</h2>
+            <p>{"Amazing!" if stats['study_streak'] > 7 else "Great start!"}</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>⏱️ Study Time Today</h3>
+            <h2>{stats['study_time_today']:.1f} hrs</h2>
+            <p>Goal: {stats['daily_goals']['study_time']} hrs</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col4:
+        st.markdown(f"""
+        <div class="metric-card">
+            <h3>🏆 Achievements</h3>
+            <h2>{stats['achievements']}</h2>
+            <p>{len(stats['badges'])} badges earned</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Display recent achievements
+    if stats['badges']:
+        st.subheader("🏅 Recent Achievements")
+        achievement_cols = st.columns(min(4, len(stats['badges'])))
+        for i, badge in enumerate(stats['badges'][-4:]):  # Show last 4 badges
+            with achievement_cols[i]:
+                st.markdown(f'<div class="achievement-badge">{badge.replace("_", " ").title()}</div>', 
+                          unsafe_allow_html=True)
+    
+    # Subject Progress with safe handling
+    st.subheader("📈 Subject Progress")
+    
+    # Use user's actual progress or create sample data
+    if user_data.get("progress"):
+        current_progress = user_data["progress"].copy()
+        
+        # Add some adaptive learning based on user stats
+        if stats['sessions_completed'] > 0:
+            for subject in current_progress:
+                boost = min(stats['sessions_completed'] * 2, 20)
+                current_progress[subject] = min(100, current_progress[subject] + boost)
+        
+        progress_data = pd.DataFrame([
+            {"Subject": subject, "Progress": progress}
+            for subject, progress in current_progress.items()
+        ])
+    else:
+        # Safe default progress for users without specific progress data
+        default_subjects = safe_get_subjects(user_data, ["Mathematics", "Physics", "Chemistry", "Literature"])
+        progress_data = pd.DataFrame([
+            {"Subject": subject, "Progress": max(0, min(100, random.randint(20, 40) + stats['overall_progress']))}
+            for subject in default_subjects[:4]
+        ])
+    
+    if not progress_data.empty:
+        fig = px.bar(progress_data, x="Subject", y="Progress", 
+                     color="Progress", color_continuous_scale="viridis",
+                     title="Your Learning Progress by Subject")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Interactive Learning Path
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("🎯 Today's Learning Plan")
+        
+        # Generate learning tasks based on user's interests with safe handling
+        subjects = safe_get_subjects(user_data, ["Mathematics", "Physics", "Literature", "History"])
+        learning_tasks = []
+        
+        # Adaptive difficulty based on progress
+        difficulty_level = "Beginner" if stats['overall_progress'] < 30 else "Intermediate" if stats['overall_progress'] < 70 else "Advanced"
+        
+        for i, subject in enumerate(subjects[:4]):
+            tasks = {
+                "Mathematics": f"{difficulty_level} Algebra Chapter 5",
+                "Physics": f"{difficulty_level} Newton's Laws Practice", 
+                "Chemistry": f"{difficulty_level} Chemical Bonding Exercises",
+                "Literature": f"{difficulty_level} Essay Writing Practice",
+                "History": f"{difficulty_level} World War II Timeline",
+                "Biology": f"{difficulty_level} Cell Structure Study",
+                "Geography": f"{difficulty_level} Climate Zones Review",
+                "Economics": f"{difficulty_level} Supply and Demand Analysis"
+            }
+            
+            task_name = tasks.get(subject, f"{difficulty_level} {subject} Practice Session")
+            estimated_time = random.randint(25, 50) * (1.5 if difficulty_level == "Advanced" else 1)
+            
+            learning_tasks.append({
+                "task": task_name,
+                "time": f"{estimated_time:.0f} min",
+                "type": subject,
+                "estimated_hours": estimated_time / 60
+            })
+        
+        for task in learning_tasks:
+            with st.expander(f"📚 {task['task']} ({task['time']})"):
+                st.write(f"**Subject:** {task['type']}")
+                st.write(f"**Difficulty:** {difficulty_level}")
+                st.write("**Learning Mode:** Interactive with AI tutor")
+                st.write("**Resources:** Video, Practice Problems, Mindmap")
+                
+                col_a, col_b = st.columns(2)
+                with col_a:
+                    if st.button(f"Start Learning", key=f"start_{task['task']}"):
+                        # Update stats when starting a lesson
+                        progress_gained = random.randint(3, 8)
+                        time_spent = task['estimated_hours']
+                        
+                        update_user_stats(user_id, 'lesson_completed', 
+                                        progress_amount=progress_gained, 
+                                        time_spent=time_spent,
+                                        subject=task['type'])
+                        
+                        # Update subject progress
+                        if user_data.get("progress") and task['type'] in user_data["progress"]:
+                            user_data["progress"][task['type']] = min(100, 
+                                user_data["progress"][task['type']] + progress_gained)
+                        
+                        st.success(f"🎉 Great job! You gained {progress_gained} progress points and studied for {time_spent:.1f} hours!")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                        
+                with col_b:
+                    if st.button(f"Get Help", key=f"help_{task['task']}"):
+                        st.info("🤖 AI tutor is ready to help! Ask any questions about this topic.")
